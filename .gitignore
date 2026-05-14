@@ -1,0 +1,6 @@
+.dev/
+.cursor/
+build/
+.conan2/
+CMakeUserPresets.json
+ConanPresets.json

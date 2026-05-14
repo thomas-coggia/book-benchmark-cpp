@@ -1,0 +1,162 @@
+matching::benchmark — 5 preset(s), iterations = 5, warmup = 1000, latency = on
+  pinning: producer=2 matcher=4 stats=6
+============================================================
+Preset: quiet
+------------------------------------------------------------
+Resolved profile:
+  seed              = 42
+  num_orders        = 1000000
+  cancel_ratio      = 0.0500
+  aggressive_ratio  = 0.0200
+  buy_bias          = 0.5000
+  mu                = 0.000000
+  sigma             = 0.000050
+  initial_mid       = 10000
+  tick_size         = 1
+  place_decay       = 0.5000
+  qty_log_mean      = 2.0000
+  qty_log_stddev    = 0.6000
+  qty_min/qty_max   = 1 / 1000
+------------------------------------------------------------
+Throughput:
+  orders            = 5000000
+  trades            = 4005002
+  total elapsed     = 1063.734 ms
+  orders / sec      = 4700424.40
+  trades / sec      = 3765041.83
+Latency (ns):
+  samples           = 5000000
+  mean              = 142.6
+  stddev            = 427.6
+  p10 / p50         = 48.4 / 110.3
+  p95 / p99 / p99.9 = 326.8 / 661.4 / 1518.5
+  min / max         = 19.6 / 204755.6
+
+============================================================
+Preset: active
+------------------------------------------------------------
+Resolved profile:
+  seed              = 42
+  num_orders        = 1000000
+  cancel_ratio      = 0.2000
+  aggressive_ratio  = 0.3000
+  buy_bias          = 0.5000
+  mu                = 0.000000
+  sigma             = 0.000500
+  initial_mid       = 10000
+  tick_size         = 1
+  place_decay       = 0.4000
+  qty_log_mean      = 2.5000
+  qty_log_stddev    = 0.8000
+  qty_min/qty_max   = 1 / 1000
+------------------------------------------------------------
+Throughput:
+  orders            = 5000000
+  trades            = 3664733
+  total elapsed     = 1036.726 ms
+  orders / sec      = 4822876.57
+  trades / sec      = 3534910.98
+Latency (ns):
+  samples           = 5000000
+  mean              = 144.4
+  stddev            = 323.8
+  p10 / p50         = 40.9 / 115.0
+  p95 / p99 / p99.9 = 330.3 / 639.6 / 1208.4
+  min / max         = 18.9 / 144139.6
+
+============================================================
+Preset: cancel
+------------------------------------------------------------
+Resolved profile:
+  seed              = 42
+  num_orders        = 1000000
+  cancel_ratio      = 0.5500
+  aggressive_ratio  = 0.0500
+  buy_bias          = 0.5000
+  mu                = 0.000000
+  sigma             = 0.000100
+  initial_mid       = 10000
+  tick_size         = 1
+  place_decay       = 0.4500
+  qty_log_mean      = 2.0000
+  qty_log_stddev    = 0.5000
+  qty_min/qty_max   = 1 / 500
+------------------------------------------------------------
+Throughput:
+  orders            = 5000000
+  trades            = 260481
+  total elapsed     = 911.739 ms
+  orders / sec      = 5484028.40
+  trades / sec      = 285697.04
+Latency (ns):
+  samples           = 5000000
+  mean              = 116.1
+  stddev            = 295.7
+  p10 / p50         = 68.7 / 103.6
+  p95 / p99 / p99.9 = 196.5 / 279.8 / 471.3
+  min / max         = 13.9 / 139331.4
+
+============================================================
+Preset: volatile
+------------------------------------------------------------
+Resolved profile:
+  seed              = 42
+  num_orders        = 1000000
+  cancel_ratio      = 0.1500
+  aggressive_ratio  = 0.2500
+  buy_bias          = 0.5000
+  mu                = 0.000000
+  sigma             = 0.005000
+  initial_mid       = 10000
+  tick_size         = 1
+  place_decay       = 0.3000
+  qty_log_mean      = 2.5000
+  qty_log_stddev    = 0.8000
+  qty_min/qty_max   = 1 / 1000
+------------------------------------------------------------
+Throughput:
+  orders            = 5000000
+  trades            = 3888885
+  total elapsed     = 1233.279 ms
+  orders / sec      = 4054232.74
+  trades / sec      = 3153288.98
+Latency (ns):
+  samples           = 5000000
+  mean              = 182.7
+  stddev            = 2647.3
+  p10 / p50         = 41.6 / 143.4
+  p95 / p99 / p99.9 = 410.1 / 792.0 / 1759.1
+  min / max         = 18.2 / 5823451.4
+
+============================================================
+Preset: sweep
+------------------------------------------------------------
+Resolved profile:
+  seed              = 42
+  num_orders        = 1000000
+  cancel_ratio      = 0.1000
+  aggressive_ratio  = 0.5000
+  buy_bias          = 0.5000
+  mu                = 0.000000
+  sigma             = 0.000800
+  initial_mid       = 10000
+  tick_size         = 1
+  place_decay       = 0.3500
+  qty_log_mean      = 5.0000
+  qty_log_stddev    = 1.0000
+  qty_min/qty_max   = 1 / 10000
+------------------------------------------------------------
+Throughput:
+  orders            = 5000000
+  trades            = 4268980
+  total elapsed     = 1085.053 ms
+  orders / sec      = 4608070.85
+  trades / sec      = 3934352.46
+Latency (ns):
+  samples           = 5000000
+  mean              = 154.1
+  stddev            = 398.2
+  p10 / p50         = 38.1 / 123.5
+  p95 / p99 / p99.9 = 352.0 / 696.9 / 1548.7
+  min / max         = 18.9 / 195199.4
+

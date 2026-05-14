@@ -1,0 +1,22 @@
+// Single translation unit that includes every public header so compile_commands.json picks
+// up the header-only library and clangd / clang-tidy resolve them with the right include
+// paths. No runtime symbols.
+#include "matching/benchmark/benchmark.hpp"
+#include "matching/benchmark/benchmark_timer.hpp"
+#include "matching/benchmark/market_profile.hpp"
+#include "matching/benchmark/order_generator.hpp"
+#include "matching/benchmark/statistics.hpp"
+#include "matching/benchmark/tsc_timer.hpp"
+#include "matching/cli.hpp"
+#include "matching/clob_factory.hpp"
+#include "matching/input_event.hpp"
+#include "matching/input_parser.hpp"
+#include "matching/message_types.hpp"
+#include "matching/order_book.hpp"
+#include "matching/output_event.hpp"
+#include "matching/output_formatter.hpp"
+#include "matching/runtime/agent.hpp"
+#include "matching/runtime/agent_system.hpp"
+#include "matching/runtime/event_loop.hpp"
+#include "matching/runtime/signal_handler.hpp"
+#include "matching/runtime/spsc_queue.hpp"

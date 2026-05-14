@@ -1,0 +1,18 @@
+# https://clangd.llvm.org/config
+CompileFlags:
+  CompilationDatabase: build/clang-19-debug
+  Compiler: /usr/bin/clang++-19
+  Add: [-std=c++23]
+Index:
+  StandardLibrary: Yes
+  Background: Build
+Completion:
+  AllScopes: No
+Diagnostics:
+  UnusedIncludes: None
+  Suppress: [unused-includes]
+
+
+
+
+
