@@ -30,7 +30,7 @@ int main(int argc, char** argv) {
     const auto order_queue = std::make_shared<order_queue_t>();
     const auto output_queue = std::make_shared<output_queue_t>();
 
-    install_signal_handler();
+    [[maybe_unused]] const auto signal_hooks = make_stop_source_signal_guards();
     std::stop_token token = global_stop_source().get_token();
 
     output_formatter_t formatter{std::cout};
@@ -60,8 +60,6 @@ int main(int argc, char** argv) {
     auto system = make_agent_system(global_stop_source(), std::move(reader_agent), std::move(matcher_agent), std::move(writer_agent));
     system.start();
     system.join();
-
-    uninstall_signal_handler();
   } catch (const matching_engine_config::help_requested&) {
     return 0;
   } catch (const matching_engine_config::parse_error&) {
