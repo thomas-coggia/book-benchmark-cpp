@@ -1,15 +1,15 @@
 #include <array>
-#include <charconv>
+#include <cstdint>
+#include <cxxopts.hpp>
 #include <iostream>
+#include <optional>
 #include <print>
 #include <string>
 #include <string_view>
-#include <system_error>
 #include <vector>
 
 #include "matching/benchmark/benchmark.hpp"
 #include "matching/benchmark/market_profile.hpp"
-#include "matching/cli.hpp"
 #include "matching/clob_factory.hpp"
 #include "matching/order_book.hpp"
 
@@ -63,96 +63,82 @@ namespace {
     std::println(std::cout, "  --help, -h                   print this message and exit");
   }
 
-  template <typename T>
-  bool parse_into(std::string_view sv, T& out) noexcept {
-    if (sv.empty()) {
-      return false;
-    }
-    if constexpr (std::is_floating_point_v<T>) {
-      try {
-        std::size_t consumed = 0;
-        const std::string buf{sv};
-        const double parsed = std::stod(buf, &consumed);
-        if (consumed != buf.size()) {
-          return false;
-        }
-        out = static_cast<T>(parsed);
-        return true;
-      } catch (...) {
-        return false;
-      }
-    } else {
-      const auto* const begin = sv.data();
-      const auto* const end = sv.data() + sv.size();
-      const auto [ptr, ec] = std::from_chars(begin, end, out);
-      return ec == std::errc{} && ptr == end;
-    }
-  }
-
   template <typename T, typename Setter>
-  void apply_override(const cli_args_t& args, std::string_view flag, Setter&& setter) {
-    const auto raw = args.get(flag);
-    if (!raw.has_value()) {
+  void apply_override(const cxxopts::ParseResult& result, const char* flag, Setter&& setter) {
+    if (result.count(flag) == 0) {
       return;
     }
-    T value{};
-    if (!parse_into<T>(*raw, value)) {
-      std::println(std::cerr, "benchmark: invalid value for --{}: '{}'", flag, *raw);
+    try {
+      setter(result[flag].as<T>());
+    } catch (const cxxopts::exceptions::exception& ex) {
+      std::println(std::cerr, "benchmark: invalid value for --{}: {}", flag, ex.what());
       std::exit(1);
     }
-    setter(value);
   }
 
-  market_profile_t apply_overrides(market_profile_t base, const cli_args_t& args) {
-    apply_override<std::size_t>(args, "orders", [&](std::size_t v) { base.num_orders = v; });
-    apply_override<std::uint64_t>(args, "seed", [&](std::uint64_t v) { base.seed = v; });
-    apply_override<double>(args, "cancel-ratio", [&](double v) { base.cancel_ratio = v; });
-    apply_override<double>(args, "aggressive-ratio", [&](double v) { base.aggressive_ratio = v; });
-    apply_override<double>(args, "buy-bias", [&](double v) { base.buy_bias = v; });
-    apply_override<double>(args, "mu", [&](double v) { base.mu = v; });
-    apply_override<double>(args, "sigma", [&](double v) { base.sigma = v; });
-    apply_override<std::int32_t>(args, "initial-mid", [&](std::int32_t v) { base.initial_mid = v; });
-    apply_override<std::int32_t>(args, "tick-size", [&](std::int32_t v) { base.tick_size = v; });
-    apply_override<double>(args, "place-decay", [&](double v) { base.place_decay = v; });
-    apply_override<double>(args, "qty-log-mean", [&](double v) { base.qty_log_mean = v; });
-    apply_override<double>(args, "qty-log-stddev", [&](double v) { base.qty_log_stddev = v; });
-    apply_override<std::int32_t>(args, "qty-min", [&](std::int32_t v) { base.qty_min = v; });
-    apply_override<std::int32_t>(args, "qty-max", [&](std::int32_t v) { base.qty_max = v; });
+  market_profile_t apply_overrides(market_profile_t base, const cxxopts::ParseResult& result) {
+    apply_override<std::size_t>(result, "orders", [&](std::size_t v) { base.num_orders = v; });
+    apply_override<std::uint64_t>(result, "seed", [&](std::uint64_t v) { base.seed = v; });
+    apply_override<double>(result, "cancel-ratio", [&](double v) { base.cancel_ratio = v; });
+    apply_override<double>(result, "aggressive-ratio", [&](double v) { base.aggressive_ratio = v; });
+    apply_override<double>(result, "buy-bias", [&](double v) { base.buy_bias = v; });
+    apply_override<double>(result, "mu", [&](double v) { base.mu = v; });
+    apply_override<double>(result, "sigma", [&](double v) { base.sigma = v; });
+    apply_override<std::int32_t>(result, "initial-mid", [&](std::int32_t v) { base.initial_mid = v; });
+    apply_override<std::int32_t>(result, "tick-size", [&](std::int32_t v) { base.tick_size = v; });
+    apply_override<double>(result, "place-decay", [&](double v) { base.place_decay = v; });
+    apply_override<double>(result, "qty-log-mean", [&](double v) { base.qty_log_mean = v; });
+    apply_override<double>(result, "qty-log-stddev", [&](double v) { base.qty_log_stddev = v; });
+    apply_override<std::int32_t>(result, "qty-min", [&](std::int32_t v) { base.qty_min = v; });
+    apply_override<std::int32_t>(result, "qty-max", [&](std::int32_t v) { base.qty_max = v; });
     return base;
   }
 
-  void apply_cpu_override(const cli_args_t& args, std::string_view flag, std::optional<int>& slot) {
-    if (const auto raw = args.get(flag); raw.has_value()) {
-      int v{};
-      if (!parse_into<int>(*raw, v) || v < 0) {
-        std::println(std::cerr, "benchmark: invalid value for --{}: '{}' (expected non-negative integer)", flag, *raw);
+  void apply_cpu_override(const cxxopts::ParseResult& result, const char* flag, std::optional<int>& slot) {
+    if (result.count(flag) == 0) {
+      return;
+    }
+    try {
+      const int v = result[flag].as<int>();
+      if (v < 0) {
+        std::println(std::cerr, "benchmark: invalid value for --{}: '{}' (expected non-negative integer)", flag, v);
         std::exit(1);
       }
       slot = v;
+    } catch (const cxxopts::exceptions::exception& ex) {
+      std::println(std::cerr, "benchmark: invalid value for --{}: {}", flag, ex.what());
+      std::exit(1);
     }
   }
 
-  benchmark_config_t resolve_runtime(const cli_args_t& args) {
+  benchmark_config_t resolve_runtime(const cxxopts::ParseResult& result) {
     benchmark_config_t cfg{};
-    apply_override<std::size_t>(args, "warmup", [&](std::size_t v) { cfg.warmup_events = v; });
-    apply_override<std::size_t>(args, "iterations", [&](std::size_t v) { cfg.iterations = v; });
-    apply_cpu_override(args, "producer-cpu", cfg.producer_cpu);
-    apply_cpu_override(args, "matcher-cpu", cfg.matcher_cpu);
-    apply_cpu_override(args, "stats-cpu", cfg.stats_cpu);
-    if (const auto v = args.get("latency-stats"); v.has_value()) {
-      if (*v == "on" || *v == "true" || *v == "1") {
+    apply_override<std::size_t>(result, "warmup", [&](std::size_t v) { cfg.warmup_events = v; });
+    apply_override<std::size_t>(result, "iterations", [&](std::size_t v) { cfg.iterations = v; });
+    apply_cpu_override(result, "producer-cpu", cfg.producer_cpu);
+    apply_cpu_override(result, "matcher-cpu", cfg.matcher_cpu);
+    apply_cpu_override(result, "stats-cpu", cfg.stats_cpu);
+    if (result.count("latency-stats") != 0) {
+      std::string v;
+      try {
+        v = result["latency-stats"].as<std::string>();
+      } catch (const cxxopts::exceptions::exception& ex) {
+        std::println(std::cerr, "benchmark: invalid value for --latency-stats: {}", ex.what());
+        std::exit(1);
+      }
+      if (v == "on" || v == "true" || v == "1") {
         cfg.collect_latency = true;
-      } else if (*v == "off" || *v == "false" || *v == "0") {
+      } else if (v == "off" || v == "false" || v == "0") {
         cfg.collect_latency = false;
       } else {
-        std::println(std::cerr, "benchmark: --latency-stats must be on|off, got '{}'", *v);
+        std::println(std::cerr, "benchmark: --latency-stats must be on|off, got '{}'", v);
         std::exit(1);
       }
     }
     return cfg;
   }
 
-  std::vector<market_profile_t> select_presets(const cli_args_t& args) {
+  std::vector<market_profile_t> select_presets(const cxxopts::ParseResult& result) {
     static constexpr std::array<const market_profile_t*, 5> all = {
       &profile_quiet_build,
       &profile_active_match,
@@ -161,7 +147,10 @@ namespace {
       &profile_sweep,
     };
 
-    const auto pick = args.get("profile").value_or(std::string_view{"all"});
+    std::string pick = "all";
+    if (result.count("profile") != 0) {
+      pick = result["profile"].as<std::string>();
+    }
     std::vector<market_profile_t> out;
     if (pick == "all") {
       for (const auto* p : all) {
@@ -179,17 +168,55 @@ namespace {
     std::exit(1);
   }
 
+  cxxopts::Options build_options(const char* program_name) {
+    cxxopts::Options opts(program_name, "");
+    opts.add_options()
+      ("h,help", "Print help")
+      ("profile", "Preset name", cxxopts::value<std::string>())
+      ("orders", "Order count override", cxxopts::value<std::size_t>())
+      ("warmup", "Warmup events", cxxopts::value<std::size_t>())
+      ("iterations", "Timed iterations", cxxopts::value<std::size_t>())
+      ("seed", "RNG seed", cxxopts::value<std::uint64_t>())
+      ("latency-stats", "on|off", cxxopts::value<std::string>())
+      ("producer-cpu", "Producer CPU", cxxopts::value<int>())
+      ("matcher-cpu", "Matcher CPU", cxxopts::value<int>())
+      ("stats-cpu", "Stats CPU", cxxopts::value<int>())
+      ("cancel-ratio", "Cancel probability", cxxopts::value<double>())
+      ("aggressive-ratio", "Aggressive add probability", cxxopts::value<double>())
+      ("buy-bias", "Buy-side probability", cxxopts::value<double>())
+      ("mu", "Mid log-drift", cxxopts::value<double>())
+      ("sigma", "Mid log-volatility", cxxopts::value<double>())
+      ("initial-mid", "Starting mid (ticks)", cxxopts::value<std::int32_t>())
+      ("tick-size", "Tick size", cxxopts::value<std::int32_t>())
+      ("place-decay", "Passive distance decay", cxxopts::value<double>())
+      ("qty-log-mean", "Qty log-normal mean", cxxopts::value<double>())
+      ("qty-log-stddev", "Qty log-normal stddev", cxxopts::value<double>())
+      ("qty-min", "Quantity minimum", cxxopts::value<std::int32_t>())
+      ("qty-max", "Quantity maximum", cxxopts::value<std::int32_t>());
+    return opts;
+  }
+
 }  // namespace
 
 int main(int argc, char** argv) {
-  cli_args_t args{argc, argv};
-  if (args.has_flag("help") || args.has_flag("h")) {
-    print_help(argv[0]);
+  const char* prog = argv != nullptr && argv[0] != nullptr ? argv[0] : "benchmark";
+  cxxopts::Options options = build_options(prog);
+
+  cxxopts::ParseResult parsed;
+  try {
+    parsed = options.parse(argc, argv);
+  } catch (const cxxopts::exceptions::exception& ex) {
+    std::println(std::cerr, "benchmark: {}", ex.what());
+    return 1;
+  }
+
+  if (parsed.count("help") != 0) {
+    print_help(prog);
     return 0;
   }
 
-  const auto presets = select_presets(args);
-  const auto runtime = resolve_runtime(args);
+  const auto presets = select_presets(parsed);
+  const auto runtime = resolve_runtime(parsed);
 
   std::println(std::cout, "matching::benchmark — {} preset(s), iterations = {}, warmup = {}, latency = {}",
     presets.size(), runtime.iterations, runtime.warmup_events, runtime.collect_latency ? "on" : "off");
@@ -199,7 +226,7 @@ int main(int argc, char** argv) {
     runtime.stats_cpu.has_value() ? std::to_string(*runtime.stats_cpu) : "off");
 
   for (const auto& base : presets) {
-    const market_profile_t profile = apply_overrides(base, args);
+    const market_profile_t profile = apply_overrides(base, parsed);
     auto factory = [&](counting_emitter_t emitter) {
       return clob_factory_t{default_book_capacity, std::move(emitter)};
     };

@@ -41,6 +41,7 @@ set(CMAKE_CXX_STANDARD 23)
 # the signal handler flips on SIGINT/SIGTERM. Everything else under include/matching/ stays
 # header-only.
 find_package(Threads REQUIRED)
+find_package(cxxopts REQUIRED CONFIG)
 
 add_library(matching_runtime STATIC src/signal_handler.cpp)
 target_include_directories(matching_runtime
@@ -62,12 +63,12 @@ target_compile_features(matching_compile PRIVATE cxx_std_23)
 
 # --- Application binary -------------------------------------------------------------------
 add_executable(matching_engine src/matching_engine.cpp)
-target_link_libraries(matching_engine PRIVATE matching::matching)
+target_link_libraries(matching_engine PRIVATE matching::matching cxxopts::cxxopts)
 target_compile_features(matching_engine PRIVATE cxx_std_23)
 
 # --- Benchmark binary ---------------------------------------------------------------------
 add_executable(benchmark src/benchmark.cpp)
-target_link_libraries(benchmark PRIVATE matching::matching)
+target_link_libraries(benchmark PRIVATE matching::matching cxxopts::cxxopts)
 target_compile_features(benchmark PRIVATE cxx_std_23)
 
 # --- Tests --------------------------------------------------------------------------------

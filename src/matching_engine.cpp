@@ -1,14 +1,12 @@
-#include <charconv>
 #include <cstddef>
+#include <cxxopts.hpp>
 #include <iostream>
+#include <optional>
 #include <print>
 #include <stop_token>
-#include <system_error>
 #include <type_traits>
 #include <utility>
 #include <variant>
-
-#include "matching/cli.hpp"
 #include "matching/clob_factory.hpp"
 #include "matching/input_parser.hpp"
 #include "matching/output_formatter.hpp"
@@ -178,62 +176,54 @@ namespace {
     );
   }
 
-  [[nodiscard]] std::optional<std::size_t> parse_size(std::string_view raw) noexcept {
-    std::size_t value = 0;
-    const auto* const begin = raw.data();
-    const auto* const end = raw.data() + raw.size();
-    const auto [ptr, ec] = std::from_chars(begin, end, value);
-    if (ec != std::errc{} || ptr != end || value == 0) {
-      return std::nullopt;
-    }
-    return value;
-  }
-
-  [[nodiscard]] std::optional<int> parse_cpu(std::string_view raw) noexcept {
-    int value = 0;
-    const auto* const begin = raw.data();
-    const auto* const end = raw.data() + raw.size();
-    const auto [ptr, ec] = std::from_chars(begin, end, value);
-    if (ec != std::errc{} || ptr != end || value < 0) {
-      return std::nullopt;
-    }
-    return value;
-  }
-
 }  // namespace
 
 int main(int argc, char** argv) {
-  cli_args_t args{argc, argv};
-  if (args.has_flag("help") || args.has_flag("h")) {
+  cxxopts::Options options(argv != nullptr && argv[0] != nullptr ? argv[0] : "matching_engine", "");
+  options.add_options()
+    ("h,help", "Print detailed help and exit")
+    ("capacity", "Maximum number of resting orders the book can allocate", cxxopts::value<std::size_t>())
+    ("reader-cpu", "Pin the stdin reader agent to CPU N", cxxopts::value<int>())
+    ("matcher-cpu", "Pin the matcher agent to CPU N", cxxopts::value<int>())
+    ("writer-cpu", "Pin the output writer agent to CPU N", cxxopts::value<int>());
+
+  cxxopts::ParseResult parsed;
+  try {
+    parsed = options.parse(argc, argv);
+  } catch (const cxxopts::exceptions::exception& ex) {
+    std::println(std::cerr, "matching_engine: {}", ex.what());
+    return 1;
+  }
+
+  if (parsed.count("help") != 0) {
     print_help();
     return 0;
   }
 
   std::size_t capacity = default_capacity_v;
-  if (const auto cap = args.get("capacity"); cap.has_value()) {
-    const auto parsed = parse_size(*cap);
-    if (!parsed.has_value()) {
-      std::println(std::cerr, "matching_engine: invalid --capacity value '{}'", *cap);
+  if (parsed.count("capacity") != 0) {
+    capacity = parsed["capacity"].as<std::size_t>();
+    if (capacity == 0) {
+      std::println(std::cerr, "matching_engine: invalid --capacity value '0'");
       return 1;
     }
-    capacity = *parsed;
   }
 
   std::optional<int> reader_cpu;
   std::optional<int> matcher_cpu;
   std::optional<int> writer_cpu;
-  for (const auto& [flag, holder] : std::initializer_list<std::pair<std::string_view, std::optional<int>*>>{
+  for (const auto& [flag, holder] : std::initializer_list<std::pair<const char*, std::optional<int>*>>{
          {"reader-cpu", &reader_cpu},
          {"matcher-cpu", &matcher_cpu},
          {"writer-cpu", &writer_cpu},
        }) {
-    if (const auto raw = args.get(flag); raw.has_value()) {
-      const auto parsed = parse_cpu(*raw);
-      if (!parsed.has_value()) {
-        std::println(std::cerr, "matching_engine: invalid --{} value '{}'", flag, *raw);
+    if (parsed.count(flag) != 0) {
+      const int value = parsed[flag].as<int>();
+      if (value < 0) {
+        std::println(std::cerr, "matching_engine: invalid --{} value '{}'", flag, value);
         return 1;
       }
-      *holder = *parsed;
+      *holder = value;
     }
   }
 

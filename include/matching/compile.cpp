@@ -7,7 +7,6 @@
 #include "matching/benchmark/order_generator.hpp"
 #include "matching/benchmark/statistics.hpp"
 #include "matching/benchmark/tsc_timer.hpp"
-#include "matching/cli.hpp"
 #include "matching/clob_factory.hpp"
 #include "matching/input_event.hpp"
 #include "matching/input_parser.hpp"

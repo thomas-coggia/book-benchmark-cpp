@@ -144,5 +144,5 @@ TSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build/clang-19-
 
 ## Repo notes
 
-- **C++23**, Linux-oriented. **Conan 2** supplies GoogleTest only; no runtime third-party deps in the engine path. **`cmake_layout()` + `ConanPresets.json`** ([extend presets](https://docs.conan.io/2/examples/tools/cmake/cmake_toolchain/extend_own_cmake_presets.html)): run `conan install` per variant so includes stay valid.
+- **C++23**, Linux-oriented. **Conan 2** supplies **cxxopts** (CLI for `matching_engine` / `benchmark`) and **GoogleTest** (tests only). Library TUs stay third-party-free. **`cmake_layout()` + `ConanPresets.json`** ([extend presets](https://docs.conan.io/2/examples/tools/cmake/cmake_toolchain/extend_own_cmake_presets.html)): run `conan install` per variant so generators (including `cxxopts` CMake config) stay valid.
 - Mostly **header-only**; the extra translation unit is `src/signal_handler.cpp` (global stop source for signals).

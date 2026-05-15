@@ -107,7 +107,6 @@ test-7cc798/
 │   ├── output_event.hpp
 │   ├── output_formatter.hpp
 │   ├── message_types.hpp
-│   ├── cli.hpp
 │   ├── compile.cpp             # umbrella TU for clangd/tidy (includes all public headers)
 │   ├── runtime/
 │   │   ├── agent.hpp

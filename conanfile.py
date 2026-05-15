@@ -1,8 +1,9 @@
 """Conan 2 recipe for the matching engine.
 
-Production code carries zero third-party dependencies; the only external library that ever
-reaches a translation unit is GoogleTest, declared here as a `test_requires` so it stays
-out of the consumer-visible interface and out of the matching::matching INTERFACE library.
+Production matching code stays third-party-free in library TUs. Dependencies supplied here:
+
+- **cxxopts** (required): CLI parsing for `matching_engine` and `benchmark` executables only.
+- **gtest** (`test_requires`): linked only from tests; never part of `matching::matching`.
 """
 
 import os
@@ -47,8 +48,7 @@ class MatchingConan(ConanFile):
         ]
 
     def requirements(self):
-        # Production code carries zero third-party dependencies.
-        pass
+        self.requires("cxxopts/3.3.1")
 
     def build_requirements(self):
         self.test_requires("gtest/1.14.0")
