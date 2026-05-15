@@ -327,11 +327,43 @@ namespace matching {
     EXPECT_EQ(book.bid_depth(), 1u);
   }
 
-  TEST_F(OrderBookTest, ZeroQuantityAddIsNoop) {
+  TEST_F(OrderBookTest, StatelessInvalidAddQuantityEmitsError) {
     auto book = make_book();
     book(add_order_event_t{1, side_t::buy, 0, 100});
-    EXPECT_TRUE(events_.empty());
+    ASSERT_EQ(events_.size(), 1u);
+    ASSERT_NE(as_error(events_[0]), nullptr);
+    EXPECT_EQ(as_error(events_[0])->order_id, 1);
+    EXPECT_EQ(as_error(events_[0])->kind, order_error_kind_t::invalid_add_quantity);
     EXPECT_EQ(book.bid_depth(), 0u);
+    EXPECT_EQ(book.ask_depth(), 0u);
+  }
+
+  TEST_F(OrderBookTest, StatelessInvalidAddPriceEmitsError) {
+    auto book = make_book();
+    book(add_order_event_t{1, side_t::buy, 10, 0});
+    ASSERT_EQ(events_.size(), 1u);
+    ASSERT_NE(as_error(events_[0]), nullptr);
+    EXPECT_EQ(as_error(events_[0])->order_id, 1);
+    EXPECT_EQ(as_error(events_[0])->kind, order_error_kind_t::invalid_add_price);
+    EXPECT_EQ(book.bid_depth(), 0u);
+  }
+
+  TEST_F(OrderBookTest, StatelessInvalidAddOrderIdEmitsError) {
+    auto book = make_book();
+    book(add_order_event_t{0, side_t::buy, 10, 100});
+    ASSERT_EQ(events_.size(), 1u);
+    ASSERT_NE(as_error(events_[0]), nullptr);
+    EXPECT_EQ(as_error(events_[0])->order_id, 0);
+    EXPECT_EQ(as_error(events_[0])->kind, order_error_kind_t::invalid_add_order_id);
+  }
+
+  TEST_F(OrderBookTest, StatelessInvalidCancelOrderIdEmitsError) {
+    auto book = make_book();
+    book(cancel_order_event_t{0});
+    ASSERT_EQ(events_.size(), 1u);
+    ASSERT_NE(as_error(events_[0]), nullptr);
+    EXPECT_EQ(as_error(events_[0])->order_id, 0);
+    EXPECT_EQ(as_error(events_[0])->kind, order_error_kind_t::invalid_cancel_order_id);
   }
 
 }  // namespace matching

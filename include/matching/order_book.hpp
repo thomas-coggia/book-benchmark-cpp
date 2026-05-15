@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <map>
@@ -278,9 +279,21 @@ namespace matching {
 
     /// Add order event path: try to match the incoming order against the opposite side, then
     /// rest any residual quantity on its own side.
+    ///
+    /// Stateless field checks (positive @c order_id, @c quantity, @c price) emit
+    /// @ref order_error_event_t and skip matching; internal book invariants remain @c assert-gated.
     void operator()(const add_order_event_t& event) {
+      if (event.order_id <= 0) {
+        emitter_(order_error_event_t{event.order_id, order_error_kind_t::invalid_add_order_id});
+        return;
+      }
       if (event.quantity <= 0) {
-        return;  // No-op for non-positive quantities; the parser surfaces these as errors.
+        emitter_(order_error_event_t{event.order_id, order_error_kind_t::invalid_add_quantity});
+        return;
+      }
+      if (event.price <= 0) {
+        emitter_(order_error_event_t{event.order_id, order_error_kind_t::invalid_add_price});
+        return;
       }
 
       add_order_event_t residual = event;
@@ -294,6 +307,10 @@ namespace matching {
 
     /// Cancel order event path: @c std::pmr::unordered_map for ids; @c pmr::map for prices.
     void operator()(const cancel_order_event_t& event) {
+      if (event.order_id <= 0) {
+        emitter_(order_error_event_t{event.order_id, order_error_kind_t::invalid_cancel_order_id});
+        return;
+      }
       const auto it = lookup_.find(event.order_id);
       if (it == lookup_.end() || !it->second->active) {
         emitter_(order_error_event_t{event.order_id, order_error_kind_t::unknown_order_id});
@@ -373,12 +390,7 @@ namespace matching {
         order_node_t* const resting = cursor;
         order_node_t* const next = resting->next_same_price;
 
-        if (!resting->active) {
-          // Defensive: a retired order should already be unlinked, but the chain walk is
-          // robust to a stale node either way.
-          cursor = next;
-          continue;
-        }
+        assert(resting->active);
 
         const quantity_t resting_qty = resting->quantity;
         const quantity_t trade_qty = std::min(incoming.quantity, resting_qty);

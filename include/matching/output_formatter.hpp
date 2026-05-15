@@ -32,7 +32,8 @@ namespace matching {
       std::println(*out_, "4,{},{}", event.order_id, event.remaining_quantity);
     }
 
-    /// OrderError → @c "5,<orderid>,<kind>" (@p kind is @ref order_error_kind_t as integer).
+    /// OrderError → @c "5,<orderid>,<kind>" (@p kind is @ref order_error_kind_t:
+    /// 0 duplicate, 1 unknown cancel, 2 add qty, 3 add price, 4 add id, 5 cancel id).
     void operator()(const order_error_event_t& event) const {
       std::println(*out_, "5,{},{}", event.order_id, static_cast<unsigned>(event.kind));
     }

@@ -27,6 +27,10 @@ namespace matching {
   enum class order_error_kind_t : std::uint8_t {
     duplicate_order_id = 0,
     unknown_order_id = 1,
+    invalid_add_quantity = 2,
+    invalid_add_price = 3,
+    invalid_add_order_id = 4,
+    invalid_cancel_order_id = 5,
   };
 
   /// Non-fatal input rejection surfaced on the matcher → writer queue for downstream visibility.
