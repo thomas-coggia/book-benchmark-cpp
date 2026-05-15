@@ -33,8 +33,8 @@ namespace matching::benchmark {
 
     double place_decay{};  ///< Exponential decay parameter for distance-from-touch on non-aggressive adds.
 
-    double qty_log_mean{};      ///< Log-normal underlying mean.
-    double qty_log_stddev{};    ///< Log-normal underlying stddev.
+    double qty_log_mean{};    ///< Log-normal underlying mean.
+    double qty_log_stddev{};  ///< Log-normal underlying stddev.
     std::int32_t qty_min{};
     std::int32_t qty_max{};
   };

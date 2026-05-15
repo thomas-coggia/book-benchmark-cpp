@@ -29,9 +29,11 @@ namespace matching {
       void operator()(const trade_event_t& e) const {
         trades->push_back(e);
       }
+
       void operator()(const order_fully_filled_t& e) const {
         fills->emplace_back(e);
       }
+
       void operator()(const order_partially_filled_t& e) const {
         fills->emplace_back(e);
       }
@@ -64,10 +66,7 @@ namespace matching {
     std::size_t cancelled_unknown = 0;
 
     auto apply_fill_to_shadow = [&](const fill_variant_t& fill) {
-      const order_id_t id = std::visit(
-        [](const auto& f) -> order_id_t { return f.order_id; },
-        fill
-      );
+      const order_id_t id = std::visit([](const auto& f) -> order_id_t { return f.order_id; }, fill);
       auto it = remaining.find(id);
       ASSERT_NE(it, remaining.end()) << "fill references unknown order " << id;
       std::visit(
@@ -106,7 +105,8 @@ namespace matching {
             }
           }
         },
-        event);
+        event
+      );
 
       book(event);
 
@@ -153,7 +153,7 @@ namespace matching {
     // trade history, since clob_t does not expose a price-level view publicly.
     std::unordered_map<order_id_t, std::pair<side_t, price_t>> resting;
     quantity_t open_qty_total = 0;
-    (void) open_qty_total;
+    (void)open_qty_total;
 
     auto apply_event_to_shadow = [&](const input_event_t& event) {
       std::visit(
@@ -165,7 +165,8 @@ namespace matching {
             resting.erase(concrete.order_id);
           }
         },
-        event);
+        event
+      );
     };
 
     for (std::size_t i = 0; i < profile.num_orders; ++i) {

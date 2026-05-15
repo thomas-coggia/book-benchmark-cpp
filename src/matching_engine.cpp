@@ -5,6 +5,7 @@
 #include <stop_token>
 #include <utility>
 
+#include "app/matching_engine_config.hpp"
 #include "matching/clob_factory.hpp"
 #include "matching/runtime/agent.hpp"
 #include "matching/runtime/agent_system.hpp"
@@ -12,7 +13,6 @@
 #include "matching/runtime/signal_handler.hpp"
 #include "matching/runtime/spsc_queue.hpp"
 #include "matching/stream_pipeline.hpp"
-#include "app/matching_engine_config.hpp"
 
 int main(int argc, char** argv) {
   try {
@@ -50,14 +50,13 @@ int main(int argc, char** argv) {
     );
     auto matcher_agent = make_agent(std::move(matcher_loop), config.matcher_cpu);
 
-    auto writer_loop = make_event_loop(
-      queue_source_shared_t<output_queue_t>{output_queue},
-      writer_handler_t{formatter},
-      token
-    );
+    auto writer_loop =
+      make_event_loop(queue_source_shared_t<output_queue_t>{output_queue}, writer_handler_t{formatter}, token);
     auto writer_agent = make_agent(std::move(writer_loop), config.writer_cpu);
 
-    auto system = make_agent_system(global_stop_source(), std::move(reader_agent), std::move(matcher_agent), std::move(writer_agent));
+    auto system = make_agent_system(
+      global_stop_source(), std::move(reader_agent), std::move(matcher_agent), std::move(writer_agent)
+    );
     system.start();
     system.join();
   } catch (const matching_engine_config::help_requested&) {

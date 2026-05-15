@@ -1,10 +1,11 @@
+#include "matching/benchmark/benchmark.hpp"
+
 #include <iostream>
 #include <print>
 
-#include "matching/benchmark/benchmark.hpp"
+#include "app/benchmark_config.hpp"
 #include "matching/clob_factory.hpp"
 #include "matching/order_book.hpp"
-#include "app/benchmark_config.hpp"
 
 namespace {
 
@@ -21,12 +22,21 @@ int main(int argc, char** argv) {
 
     const benchmark_config_t& bench = config.benchmark;
 
-    std::println(std::cout, "matching::benchmark — {} preset(s), iterations = {}, warmup = {}, latency = {}",
-      config.profiles.size(), bench.iterations, bench.warmup_events, bench.collect_latency ? "on" : "off");
-    std::println(std::cout, "  pinning: producer={} matcher={} stats={}",
+    std::println(
+      std::cout,
+      "matching::benchmark — {} preset(s), iterations = {}, warmup = {}, latency = {}",
+      config.profiles.size(),
+      bench.iterations,
+      bench.warmup_events,
+      bench.collect_latency ? "on" : "off"
+    );
+    std::println(
+      std::cout,
+      "  pinning: producer={} matcher={} stats={}",
       bench.producer_cpu.has_value() ? std::to_string(*bench.producer_cpu) : "off",
       bench.matcher_cpu.has_value() ? std::to_string(*bench.matcher_cpu) : "off",
-      bench.stats_cpu.has_value() ? std::to_string(*bench.stats_cpu) : "off");
+      bench.stats_cpu.has_value() ? std::to_string(*bench.stats_cpu) : "off"
+    );
 
     for (const auto& profile : config.profiles) {
       auto factory = [&](counting_emitter_t emitter) {

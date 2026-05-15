@@ -61,8 +61,7 @@ namespace matching {
   }  // namespace detail
 
   /// Polymorphic allocator for the order-id lookup table (same @c ladder_lookup_pool as price ladders).
-  using ladder_lookup_allocator_t =
-    std::pmr::polymorphic_allocator<std::pair<const order_id_t, order_node_t*>>;
+  using ladder_lookup_allocator_t = std::pmr::polymorphic_allocator<std::pair<const order_id_t, order_node_t*>>;
 
   /// Intrusive FIFO chain head/tail for orders at one price (the @c std::map key on the side).
   struct price_level_t {
@@ -78,9 +77,7 @@ namespace matching {
   public:
     using level_allocator_type = std::pmr::polymorphic_allocator<std::pair<const price_t, price_level_t>>;
 
-    explicit order_book_side_t(side_t side, level_allocator_type alloc)
-      : side_(side),
-        levels_(alloc) {}
+    explicit order_book_side_t(side_t side, level_allocator_type alloc) : side_(side), levels_(alloc) {}
 
     /// True if the resting order at @p resting_price would cross an aggressive order on this
     /// side priced at @p aggressive_price.  For a buy aggressive on the ask side, we cross when
@@ -197,12 +194,10 @@ namespace matching {
       explicit impl(std::size_t capacity)
         : book_capacity(capacity),
           ladder_lookup_arena(detail::ladder_lookup_arena_byte_count(capacity)),
-          ladder_lookup_mono(
-            ladder_lookup_arena.data(), ladder_lookup_arena.size(), std::pmr::new_delete_resource()),
+          ladder_lookup_mono(ladder_lookup_arena.data(), ladder_lookup_arena.size(), std::pmr::new_delete_resource()),
           ladder_lookup_pool(&ladder_lookup_mono),
           resting_order_arena(detail::resting_order_arena_byte_count(capacity)),
-          resting_order_mono(
-            resting_order_arena.data(), resting_order_arena.size(), std::pmr::new_delete_resource()) {}
+          resting_order_mono(resting_order_arena.data(), resting_order_arena.size(), std::pmr::new_delete_resource()) {}
     };
 
   public:
@@ -319,6 +314,7 @@ namespace matching {
     [[nodiscard]] const Emitter& emitter() const noexcept {
       return emitter_;
     }
+
     [[nodiscard]] Emitter& emitter() noexcept {
       return emitter_;
     }
@@ -326,6 +322,7 @@ namespace matching {
     [[nodiscard]] std::size_t bid_depth() const noexcept {
       return bids_.depth();
     }
+
     [[nodiscard]] std::size_t ask_depth() const noexcept {
       return asks_.depth();
     }
@@ -333,8 +330,7 @@ namespace matching {
   private:
     /// Allocates and value-initializes a node from @c memory_.resting_order_resource(). Throws on OOM.
     [[nodiscard]] order_node_t* allocate_resting_node(order_id_t id, side_t side, price_t price, quantity_t qty) {
-      void* const raw =
-        memory_.resting_order_resource()->allocate(sizeof(order_node_t), alignof(order_node_t));
+      void* const raw = memory_.resting_order_resource()->allocate(sizeof(order_node_t), alignof(order_node_t));
       order_node_t* const node = static_cast<order_node_t*>(raw);
       std::construct_at(node);
       node->order_id = id;
@@ -369,7 +365,8 @@ namespace matching {
     /// Drain @p level head-first, trading @c min(aggressive, resting) per step. Removes
     /// fully-filled resting orders from the chain in place, but leaves the empty-level
     /// erasure to the caller so we never invalidate the iterator we were about to bump.
-    void match_level(order_book_side_t& opposite, price_level_t& level, price_t level_price, add_order_event_t& incoming) {
+    void
+    match_level(order_book_side_t& opposite, price_level_t& level, price_t level_price, add_order_event_t& incoming) {
       order_node_t* cursor = level.head;
       while (cursor != nullptr && incoming.quantity > 0) {
         order_node_t* const resting = cursor;
@@ -432,7 +429,7 @@ namespace matching {
       node->active = false;
       lookup_.erase(node->order_id);
       // Caller (@c match_against) drops the level itself when it sees @c level.head == nullptr.
-      (void) opposite;
+      (void)opposite;
     }
 
     void rest_order(const add_order_event_t& residual) {

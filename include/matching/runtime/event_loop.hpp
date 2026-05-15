@@ -74,7 +74,8 @@ namespace matching::runtime {
   template <typename Source, typename Handler>
   [[nodiscard]] inline auto make_event_loop(Source&& source, Handler&& handler, std::stop_token token) {
     return event_loop_t<std::decay_t<Source>, std::decay_t<Handler>>(
-      std::forward<Source>(source), std::forward<Handler>(handler), std::move(token));
+      std::forward<Source>(source), std::forward<Handler>(handler), std::move(token)
+    );
   }
 
 }  // namespace matching::runtime

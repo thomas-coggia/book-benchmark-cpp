@@ -1,0 +1,21 @@
+name: clang-format
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: "19.1.7"
+
+      - name: Check formatting
+        run: |
+          git ls-files '*.cpp' '*.hpp' '*.h' '*.cc' '*.cxx' '*.inc' '*.inl' \
+            | xargs -r clang-format --dry-run --Werror

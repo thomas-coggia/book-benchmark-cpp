@@ -34,9 +34,11 @@ namespace matching {
     void operator()(const trade_event_t& event) noexcept {
       push(output_event_t{event});
     }
+
     void operator()(const order_fully_filled_t& event) noexcept {
       push(output_event_t{event});
     }
+
     void operator()(const order_partially_filled_t& event) noexcept {
       push(output_event_t{event});
     }
@@ -70,9 +72,7 @@ namespace matching {
       : in_(in), err_(err), queue_(std::move(queue)), token_(std::move(token)) {}
 
     void run() {
-      parse_stream(in_.get(), [this](const input_event_t& event) {
-        push(event);
-      }, err_.get());
+      parse_stream(in_.get(), [this](const input_event_t& event) { push(event); }, err_.get());
       push(input_event_t{shutdown_t{}});
     }
 
@@ -99,11 +99,7 @@ namespace matching {
     using book_type = clob_t<queue_emitter_type>;
     using output_queue_type = runtime::spsc_queue_t<output_event_t, Capacity>;
 
-    matcher_handler_t(
-      book_type book,
-      std::shared_ptr<output_queue_type> out,
-      std::stop_token token
-    ) noexcept
+    matcher_handler_t(book_type book, std::shared_ptr<output_queue_type> out, std::stop_token token) noexcept
       : book_(std::move(book)), out_(std::move(out)), token_(std::move(token)) {}
 
     [[nodiscard]] bool operator()(const input_event_t& event) noexcept {
@@ -137,15 +133,18 @@ namespace matching {
 
     [[nodiscard]] bool operator()(const output_event_t& event) noexcept {
       bool done = false;
-      std::visit([this, &done](const auto& concrete) {
-        using event_type = std::decay_t<decltype(concrete)>;
-        if constexpr (std::is_same_v<event_type, shutdown_t>) {
-          formatter_.get().sink().flush();
-          done = true;
-        } else {
-          formatter_.get()(concrete);
-        }
-      }, event);
+      std::visit(
+        [this, &done](const auto& concrete) {
+          using event_type = std::decay_t<decltype(concrete)>;
+          if constexpr (std::is_same_v<event_type, shutdown_t>) {
+            formatter_.get().sink().flush();
+            done = true;
+          } else {
+            formatter_.get()(concrete);
+          }
+        },
+        event
+      );
       return done;
     }
 

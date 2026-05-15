@@ -63,9 +63,9 @@ namespace matching {
 
   /// Result of attempting to parse a single line.
   enum class parse_status_t : std::uint8_t {
-    ok = 0,        ///< The line yielded an event (forwarded to the handler).
-    skipped = 1,   ///< Empty / whitespace-only / comment line — no event, no diagnostic.
-    error = 2,     ///< Ill-formed line — diagnostic emitted to the error sink.
+    ok = 0,       ///< The line yielded an event (forwarded to the handler).
+    skipped = 1,  ///< Empty / whitespace-only / comment line — no event, no diagnostic.
+    error = 2,    ///< Ill-formed line — diagnostic emitted to the error sink.
   };
 
   /// Try to decode @p line into an @ref input_event_t. On success the variant is populated

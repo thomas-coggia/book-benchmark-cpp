@@ -1,0 +1,43 @@
+# https://clang.llvm.org/docs/ClangFormatStyleOptions.html
+BasedOnStyle: Google
+ColumnLimit: 120
+
+# Indentation
+IndentWidth: 2
+ContinuationIndentWidth: 2
+ConstructorInitializerIndentWidth: 2
+UseTab: Never
+NamespaceIndentation: All
+
+# Alignment
+DerivePointerAlignment: false
+PointerAlignment: Left
+ReferenceAlignment: Pointer
+QualifierAlignment: Left
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AlignAfterOpenBracket: BlockIndent
+
+# Parameters on seperate lines
+BinPackArguments: false
+BinPackParameters: false
+AllowAllParametersOfDeclarationOnNextLine: false
+
+# Namespace comment
+FixNamespaceComments: false
+
+# Blocks
+SeparateDefinitionBlocks: Always
+InsertBraces: true
+
+# Switch
+IndentCaseLabels: false
+
+# Class
+AccessModifierOffset: -2
+
+# Enum
+AllowShortEnumsOnASingleLine: false
+
+# EOF
+InsertNewlineAtEOF: true

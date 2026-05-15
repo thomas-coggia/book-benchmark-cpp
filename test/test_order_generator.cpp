@@ -17,10 +17,13 @@ namespace matching::benchmark {
   // Discard sink: drives the engine without recording outputs, only counting trades.
   struct trade_counter_t {
     std::size_t* trades{nullptr};
+
     void operator()(const trade_event_t&) const noexcept {
       ++*trades;
     }
+
     void operator()(const order_fully_filled_t&) const noexcept {}
+
     void operator()(const order_partially_filled_t&) const noexcept {}
   };
 
@@ -45,25 +48,28 @@ namespace matching::benchmark {
 
     for (std::size_t i = 0; i < p.num_orders; ++i) {
       const matching::input_event_t e = gen.next();
-      std::visit([&](const auto& concrete) {
-        using T = std::decay_t<decltype(concrete)>;
-        if constexpr (std::is_same_v<T, matching::add_order_event_t>) {
-          ASSERT_GT(concrete.order_id, prev_add_id) << "Order ids must be strictly increasing";
-          ASSERT_GT(concrete.quantity, 0);
-          ASSERT_GT(concrete.price, 0);
-          prev_add_id = concrete.order_id;
-          added_ids.insert(concrete.order_id);
-          ++adds;
-        } else if constexpr (std::is_same_v<T, matching::cancel_order_event_t>) {
-          ASSERT_NE(added_ids.find(concrete.order_id), added_ids.end())
-            << "Cancel must reference a previously added id";
-          ++cancels;
-        } else {
-          // The generator never emits shutdown_t; an arrival here would be a generator bug.
-          // The branch exists so the variant visit covers every alternative.
-          FAIL() << "Generator emitted an unexpected shutdown_t";
-        }
-      }, e);
+      std::visit(
+        [&](const auto& concrete) {
+          using T = std::decay_t<decltype(concrete)>;
+          if constexpr (std::is_same_v<T, matching::add_order_event_t>) {
+            ASSERT_GT(concrete.order_id, prev_add_id) << "Order ids must be strictly increasing";
+            ASSERT_GT(concrete.quantity, 0);
+            ASSERT_GT(concrete.price, 0);
+            prev_add_id = concrete.order_id;
+            added_ids.insert(concrete.order_id);
+            ++adds;
+          } else if constexpr (std::is_same_v<T, matching::cancel_order_event_t>) {
+            ASSERT_NE(added_ids.find(concrete.order_id), added_ids.end())
+              << "Cancel must reference a previously added id";
+            ++cancels;
+          } else {
+            // The generator never emits shutdown_t; an arrival here would be a generator bug.
+            // The branch exists so the variant visit covers every alternative.
+            FAIL() << "Generator emitted an unexpected shutdown_t";
+          }
+        },
+        e
+      );
       book(e);
     }
 
@@ -85,16 +91,8 @@ namespace matching::benchmark {
   INSTANTIATE_TEST_SUITE_P(
     Presets,
     GeneratorSanityTest,
-    ::testing::Values(
-      profile_quiet_build,
-      profile_active_match,
-      profile_cancel_heavy,
-      profile_volatile,
-      profile_sweep
-    ),
-    [](const ::testing::TestParamInfo<market_profile_t>& info) -> std::string {
-      return std::string{info.param.name};
-    }
+    ::testing::Values(profile_quiet_build, profile_active_match, profile_cancel_heavy, profile_volatile, profile_sweep),
+    [](const ::testing::TestParamInfo<market_profile_t>& info) -> std::string { return std::string{info.param.name}; }
   );
 
 }  // namespace matching::benchmark

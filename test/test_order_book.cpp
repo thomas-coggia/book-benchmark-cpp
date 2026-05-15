@@ -24,9 +24,11 @@ namespace matching {
     void operator()(const trade_event_t& e) const {
       events->push_back({e});
     }
+
     void operator()(const order_fully_filled_t& e) const {
       events->push_back({e});
     }
+
     void operator()(const order_partially_filled_t& e) const {
       events->push_back({e});
     }
@@ -42,6 +44,7 @@ namespace matching {
     static add_order_event_t buy(order_id_t id, quantity_t qty, price_t px) {
       return add_order_event_t{id, side_t::buy, qty, px};
     }
+
     static add_order_event_t sell(order_id_t id, quantity_t qty, price_t px) {
       return add_order_event_t{id, side_t::sell, qty, px};
     }
@@ -49,9 +52,11 @@ namespace matching {
     static const trade_event_t* as_trade(const event_record_t& r) {
       return std::get_if<trade_event_t>(&r.payload);
     }
+
     static const order_fully_filled_t* as_full(const event_record_t& r) {
       return std::get_if<order_fully_filled_t>(&r.payload);
     }
+
     static const order_partially_filled_t* as_partial(const event_record_t& r) {
       return std::get_if<order_partially_filled_t>(&r.payload);
     }
@@ -153,19 +158,19 @@ namespace matching {
     EXPECT_EQ(as_trade(events_[6])->price, 102);
     EXPECT_EQ(as_trade(events_[6])->quantity, 2);
 
-    ASSERT_NE(as_full(events_[2]), nullptr);   // resting 1
-    ASSERT_NE(as_full(events_[5]), nullptr);   // resting 2
-    ASSERT_NE(as_partial(events_[8]), nullptr);// resting 3 with 3 left
+    ASSERT_NE(as_full(events_[2]), nullptr);     // resting 1
+    ASSERT_NE(as_full(events_[5]), nullptr);     // resting 2
+    ASSERT_NE(as_partial(events_[8]), nullptr);  // resting 3 with 3 left
     EXPECT_EQ(as_partial(events_[8])->remaining_quantity, 3);
   }
 
   TEST_F(OrderBookTest, AggressiveResidualRestsOnBookAndIsMatchableLater) {
     auto book = make_book();
     book(sell(1, 3, 100));
-    book(buy(2, 5, 100));    // matches 3, 2 remaining at 100
+    book(buy(2, 5, 100));  // matches 3, 2 remaining at 100
     events_.clear();
 
-    book(sell(3, 2, 100));   // crosses the residual
+    book(sell(3, 2, 100));  // crosses the residual
     ASSERT_EQ(events_.size(), 3u);
     EXPECT_EQ(as_trade(events_[0])->quantity, 2);
     EXPECT_EQ(as_trade(events_[0])->price, 100);
@@ -287,7 +292,7 @@ namespace matching {
   TEST_F(OrderBookTest, CancelAfterFullFillIsNoop) {
     auto book = make_book();
     book(buy(1, 5, 100));
-    book(sell(2, 5, 100));   // 1 is fully filled.
+    book(sell(2, 5, 100));  // 1 is fully filled.
     events_.clear();
     book(cancel_order_event_t{1});  // Should be silently ignored.
     EXPECT_TRUE(events_.empty());

@@ -45,7 +45,9 @@ namespace matching::benchmark {
     void operator()(const trade_event_t&) const noexcept {
       ++*trade_count;
     }
+
     void operator()(const order_fully_filled_t&) const noexcept {}
+
     void operator()(const order_partially_filled_t&) const noexcept {}
   };
 
@@ -101,11 +103,7 @@ namespace matching::benchmark {
         std::shared_ptr<order_queue_t> queue,
         std::stop_token token
       ) noexcept
-        : events_(&events),
-          begin_(begin),
-          end_(end),
-          queue_(std::move(queue)),
-          token_(std::move(token)) {}
+        : events_(&events), begin_(begin), end_(end), queue_(std::move(queue)), token_(std::move(token)) {}
 
       void run() {
         for (std::size_t i = begin_; i < end_; ++i) {
@@ -200,10 +198,7 @@ namespace matching::benchmark {
       latency_accumulator_t* acc_{nullptr};
     };
 
-    [[nodiscard]] inline std::vector<input_event_t> pre_generate(
-      order_generator_t gen,
-      std::size_t warmup_events
-    ) {
+    [[nodiscard]] inline std::vector<input_event_t> pre_generate(order_generator_t gen, std::size_t warmup_events) {
       const std::size_t total_events = warmup_events + gen.profile().num_orders;
       std::vector<input_event_t> events;
       events.reserve(total_events);
@@ -228,11 +223,8 @@ namespace matching::benchmark {
   /// @ref ping_t; the latency accumulator runs on the stats agent so Welford / reservoir cost
   /// cannot inflate the reported per-event latency.
   template <typename MakeFactory>
-  [[nodiscard]] inline preset_result_t run_preset(
-    const market_profile_t& profile,
-    const benchmark_config_t& cfg,
-    MakeFactory&& make_factory
-  ) {
+  [[nodiscard]] inline preset_result_t
+  run_preset(const market_profile_t& profile, const benchmark_config_t& cfg, MakeFactory&& make_factory) {
     benchmark_timer_init();
 
     preset_result_t agg{};
@@ -276,12 +268,8 @@ namespace matching::benchmark {
       auto matcher_agent = runtime::make_agent(std::move(matcher_loop), cfg.matcher_cpu);
       auto stats_agent = runtime::make_agent(std::move(stats_loop), cfg.stats_cpu);
 
-      auto system = runtime::make_agent_system(
-        source,
-        std::move(producer_agent),
-        std::move(matcher_agent),
-        std::move(stats_agent)
-      );
+      auto system =
+        runtime::make_agent_system(source, std::move(producer_agent), std::move(matcher_agent), std::move(stats_agent));
 
       const std::uint64_t window_start = bench_mark();
       system.start();
@@ -336,11 +324,7 @@ namespace matching::benchmark {
     std::println(out, "  mean              = {:.1f}", r.latency.mean_ns);
     std::println(out, "  stddev            = {:.1f}", r.latency.stddev_ns);
     std::println(
-      out,
-      "  p50 / p95 / p99   = {:.1f} / {:.1f} / {:.1f}",
-      r.latency.p50_ns,
-      r.latency.p95_ns,
-      r.latency.p99_ns
+      out, "  p50 / p95 / p99   = {:.1f} / {:.1f} / {:.1f}", r.latency.p50_ns, r.latency.p95_ns, r.latency.p99_ns
     );
     std::println(out, "");
   }

@@ -54,8 +54,7 @@ namespace matching::benchmark {
   public:
     static constexpr std::size_t max_samples_v = 1'000'000;
 
-    explicit latency_accumulator_t(std::uint64_t reservoir_seed = 0x9E3779B97F4A7C15ULL)
-      : rng_(reservoir_seed) {
+    explicit latency_accumulator_t(std::uint64_t reservoir_seed = 0x9E3779B97F4A7C15ULL) : rng_(reservoir_seed) {
       samples_.reserve(std::min<std::size_t>(max_samples_v, 1u << 16));
     }
 

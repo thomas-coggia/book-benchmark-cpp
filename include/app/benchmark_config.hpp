@@ -119,7 +119,8 @@ namespace benchmark_config {
       slot = result[flag].as<T>();
     }
 
-    inline void assign_cpu(const cxxopts::ParseResult& result, const char* flag, std::optional<int>& slot, bool& failed) {
+    inline void
+    assign_cpu(const cxxopts::ParseResult& result, const char* flag, std::optional<int>& slot, bool& failed) {
       if (result.count(flag) == 0) {
         return;
       }
@@ -193,9 +194,8 @@ namespace benchmark_config {
       }
     }
 
-    [[nodiscard]] inline matching::benchmark::market_profile_t merge_staged_overrides(
-        matching::benchmark::market_profile_t base,
-        const market_profile_overrides_t& o) {
+    [[nodiscard]] inline matching::benchmark::market_profile_t
+    merge_staged_overrides(matching::benchmark::market_profile_t base, const market_profile_overrides_t& o) {
       if (o.orders) {
         base.num_orders = *o.orders;
       }
@@ -269,9 +269,9 @@ namespace benchmark_config {
           return;
         }
       }
-      std::println(std::cerr,
-        "benchmark: unknown --profile '{}'. Valid: quiet | active | cancel | volatile | sweep | all",
-        pick);
+      std::println(
+        std::cerr, "benchmark: unknown --profile '{}'. Valid: quiet | active | cancel | volatile | sweep | all", pick
+      );
       throw parse_error{};
     }
 

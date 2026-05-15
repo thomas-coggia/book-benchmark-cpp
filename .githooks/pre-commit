@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Enforce repository .clang-format on staged C/C++ sources (commit aborts if misformatted).
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "${repo_root}"
+
+fmt_extensions='\.(c|cc|cpp|cxx|h|hh|hpp|hxx|inc|inl)$'
+
+mapfile -t staged < <(
+  git diff --cached --name-only --diff-filter=ACM | grep -E "${fmt_extensions}" || true
+)
+
+if [[ ${#staged[@]} -eq 0 ]]; then
+  exit 0
+fi
+
+failed=0
+for path in "${staged[@]}"; do
+  if [[ ! -f "${path}" ]]; then
+    continue
+  fi
+  if ! git show ":${path}" | clang-format --dry-run --Werror --assume-filename="${path}"; then
+    echo "clang-format: staged content does not match .clang-format: ${path}" >&2
+    failed=1
+  fi
+done
+
+if [[ "${failed}" -ne 0 ]]; then
+  echo >&2
+  echo "Fix: run clang-format on these files (e.g. git ls-files '*.hpp' '*.cpp' | xargs clang-format -i)" >&2
+  echo "Then re-stage and commit." >&2
+  exit 1
+fi

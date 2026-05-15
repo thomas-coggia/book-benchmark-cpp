@@ -45,11 +45,7 @@ namespace matching::runtime {
     std::atomic<std::size_t> counter{0};
     std::stop_source source;
 
-    auto loop = make_event_loop(
-      queue_source_t<queue_t>{queue},
-      counting_handler_t{&counter},
-      source.get_token()
-    );
+    auto loop = make_event_loop(queue_source_t<queue_t>{queue}, counting_handler_t{&counter}, source.get_token());
     auto agent = make_agent(std::move(loop), std::nullopt);
 
     agent.start();
@@ -75,11 +71,7 @@ namespace matching::runtime {
     std::atomic<std::size_t> counter{0};
     std::stop_source source;
 
-    auto loop = make_event_loop(
-      queue_source_t<queue_t>{queue},
-      counting_handler_t{&counter},
-      source.get_token()
-    );
+    auto loop = make_event_loop(queue_source_t<queue_t>{queue}, counting_handler_t{&counter}, source.get_token());
     auto agent = make_agent(std::move(loop), std::nullopt);
 
     agent.start();
@@ -121,18 +113,10 @@ namespace matching::runtime {
       }
     };
 
-    auto fwd_loop = make_event_loop(
-      queue_source_t<queue_t>{queue_a},
-      forwarding_handler_t{&queue_b, token},
-      token
-    );
+    auto fwd_loop = make_event_loop(queue_source_t<queue_t>{queue_a}, forwarding_handler_t{&queue_b, token}, token);
     auto fwd_agent = make_agent(std::move(fwd_loop), std::nullopt);
 
-    auto cnt_loop = make_event_loop(
-      queue_source_t<queue_t>{queue_b},
-      counting_handler_t{&downstream_counter},
-      token
-    );
+    auto cnt_loop = make_event_loop(queue_source_t<queue_t>{queue_b}, counting_handler_t{&downstream_counter}, token);
     auto cnt_agent = make_agent(std::move(cnt_loop), std::nullopt);
 
     auto system = make_agent_system(source, std::move(fwd_agent), std::move(cnt_agent));

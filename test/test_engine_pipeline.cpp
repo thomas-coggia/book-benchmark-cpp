@@ -11,7 +11,6 @@
 #include <utility>
 #include <variant>
 
-#include "matching_test_res_dir.hpp"
 #include "matching/clob_factory.hpp"
 #include "matching/input_event.hpp"
 #include "matching/output_event.hpp"
@@ -21,6 +20,7 @@
 #include "matching/runtime/event_loop.hpp"
 #include "matching/runtime/spsc_queue.hpp"
 #include "matching/stream_pipeline.hpp"
+#include "matching_test_res_dir.hpp"
 
 namespace matching {
 
@@ -41,7 +41,8 @@ namespace matching {
     }
 
     /// Drives the same three-agent pipeline as @c matching_engine until join.
-    void run_matching_engine_on_input(const std::string& input_text, std::string& stdout_text, std::string& stderr_text) {
+    void
+    run_matching_engine_on_input(const std::string& input_text, std::string& stdout_text, std::string& stderr_text) {
       std::istringstream in{input_text};
 
       memory_sink_t out{};
@@ -71,18 +72,12 @@ namespace matching {
       auto matcher_agent = runtime::make_agent(std::move(matcher_loop), std::nullopt);
 
       auto writer_loop = runtime::make_event_loop(
-        runtime::queue_source_shared_t<output_queue_t>{output_queue},
-        writer_handler_t{formatter},
-        token
+        runtime::queue_source_shared_t<output_queue_t>{output_queue}, writer_handler_t{formatter}, token
       );
       auto writer_agent = runtime::make_agent(std::move(writer_loop), std::nullopt);
 
-      auto system = runtime::make_agent_system(
-        source,
-        std::move(reader_agent),
-        std::move(matcher_agent),
-        std::move(writer_agent)
-      );
+      auto system =
+        runtime::make_agent_system(source, std::move(reader_agent), std::move(matcher_agent), std::move(writer_agent));
       system.start();
       system.join();
 
@@ -96,12 +91,9 @@ namespace matching {
     const std::filesystem::path root = matching_test_res_dir;
 
     for (const int ix : {1, 2, 3, 4, 5}) {
-      const std::filesystem::path in_path =
-        root / ("sample_" + std::to_string(ix) + ".input.txt");
-      const std::filesystem::path out_path =
-        root / ("sample_" + std::to_string(ix) + ".output.txt");
-      const std::filesystem::path err_path =
-        root / ("sample_" + std::to_string(ix) + ".stderr.txt");
+      const std::filesystem::path in_path = root / ("sample_" + std::to_string(ix) + ".input.txt");
+      const std::filesystem::path out_path = root / ("sample_" + std::to_string(ix) + ".output.txt");
+      const std::filesystem::path err_path = root / ("sample_" + std::to_string(ix) + ".stderr.txt");
 
       ASSERT_TRUE(std::filesystem::exists(in_path)) << "missing input " << in_path.string();
       ASSERT_TRUE(std::filesystem::exists(out_path)) << "missing golden " << out_path.string();
@@ -119,8 +111,7 @@ namespace matching {
       if (has_stderr_golden) {
         EXPECT_EQ(got_stderr, expected_stderr) << "stderr mismatch for scenario " << ix;
       } else {
-        EXPECT_TRUE(got_stderr.empty()) << "unexpected stderr for scenario " << ix << ":\n"
-                                        << got_stderr;
+        EXPECT_TRUE(got_stderr.empty()) << "unexpected stderr for scenario " << ix << ":\n" << got_stderr;
       }
     }
   }
@@ -148,9 +139,7 @@ namespace matching {
     auto matcher_agent = runtime::make_agent(std::move(matcher_loop), std::nullopt);
 
     auto writer_loop = runtime::make_event_loop(
-      runtime::queue_source_shared_t<output_queue_t>{output_queue},
-      writer_handler_t{formatter},
-      token
+      runtime::queue_source_shared_t<output_queue_t>{output_queue}, writer_handler_t{formatter}, token
     );
     auto writer_agent = runtime::make_agent(std::move(writer_loop), std::nullopt);
 

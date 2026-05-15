@@ -24,7 +24,7 @@ namespace matching::runtime {
       CPU_SET(cpu_id, &set);
       return ::pthread_setaffinity_np(::pthread_self(), sizeof(set), &set) == 0;
 #else
-      (void) cpu_id;
+      (void)cpu_id;
       return false;
 #endif
     }
@@ -54,7 +54,7 @@ namespace matching::runtime {
     void start() {
       thread_ = std::jthread([this](std::stop_token /*own*/) {
         if (cpu_id_.has_value()) {
-          (void) detail::pin_current_thread(*cpu_id_);
+          (void)detail::pin_current_thread(*cpu_id_);
         }
         loop_.run();
       });

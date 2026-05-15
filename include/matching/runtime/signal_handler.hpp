@@ -61,7 +61,7 @@ namespace matching::runtime {
       if (!active_) {
         return;
       }
-      (void) std::signal(signum_, previous_);
+      (void)std::signal(signum_, previous_);
       active_ = false;
       signum_ = -1;
     }
@@ -85,6 +85,7 @@ namespace matching::runtime {
       signal_guard sigint;
       signal_guard sigterm;
     };
+
     return guards{
       signal_guard{SIGINT, &detail::request_stop_signal_handler},
       signal_guard{SIGTERM, &detail::request_stop_signal_handler},

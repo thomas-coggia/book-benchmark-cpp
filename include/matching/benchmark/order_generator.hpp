@@ -26,9 +26,7 @@ namespace matching::benchmark {
   class order_generator_t {
   public:
     explicit order_generator_t(const market_profile_t& profile)
-      : profile_(profile),
-        rng_(profile.seed),
-        log_mid_(std::log(static_cast<double>(profile.initial_mid))) {
+      : profile_(profile), rng_(profile.seed), log_mid_(std::log(static_cast<double>(profile.initial_mid))) {
       live_ids_.reserve(1u << 14);
     }
 
@@ -38,8 +36,7 @@ namespace matching::benchmark {
     [[nodiscard]] input_event_t next() {
       step_mid();
 
-      const bool want_cancel =
-        !live_ids_.empty() && uniform_(rng_) < profile_.cancel_ratio;
+      const bool want_cancel = !live_ids_.empty() && uniform_(rng_) < profile_.cancel_ratio;
 
       if (want_cancel) {
         const std::size_t i = std::uniform_int_distribution<std::size_t>{0, live_ids_.size() - 1}(rng_);
@@ -127,11 +124,9 @@ namespace matching::benchmark {
     [[nodiscard]] quantity_t sample_quantity() {
       const double log_q = profile_.qty_log_mean + profile_.qty_log_stddev * normal_(rng_);
       const double q = std::exp(log_q);
-      const auto clamped = static_cast<std::int64_t>(std::clamp(
-        std::lround(q),
-        static_cast<long>(profile_.qty_min),
-        static_cast<long>(profile_.qty_max)
-      ));
+      const auto clamped = static_cast<std::int64_t>(
+        std::clamp(std::lround(q), static_cast<long>(profile_.qty_min), static_cast<long>(profile_.qty_max))
+      );
       return static_cast<quantity_t>(std::max<std::int64_t>(clamped, 1));
     }
 
