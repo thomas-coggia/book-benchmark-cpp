@@ -1,5 +1,5 @@
-matching::benchmark — 5 preset(s), iterations = 10, warmup = 1000, latency = on
-  pinning: producer=2 matcher=4 stats=6
+matching::benchmark — 5 preset(s), iterations = 10, warmup = 10000, latency = on
+  pinning: producer=2 matcher=3 stats=4
 ============================================================
 Preset: quiet
 ------------------------------------------------------------
@@ -20,17 +20,15 @@ Resolved profile:
 ------------------------------------------------------------
 Throughput:
   orders            = 10000000
-  trades            = 7968510
-  total elapsed     = 2104.295 ms
-  orders / sec      = 4752184.52
-  trades / sec      = 3786782.98
+  trades            = 7976933
+  total elapsed     = 1940.624 ms
+  orders / sec      = 5152981.81
+  trades / sec      = 4110499.07
 Latency (ns):
   samples           = 10000000
-  mean              = 142.8
-  stddev            = 422.4
-  p10 / p50         = 48.0 / 110.0
-  p95 / p99 / p99.9 = 338.1 / 674.8 / 1302.3
-  min / max         = 19.6 / 257279.4
+  mean              = 134.6
+  stddev            = 317.3
+  p50 / p95 / p99   = 117.5 / 267.0 / 479.9
 
 ============================================================
 Preset: active
@@ -52,17 +50,15 @@ Resolved profile:
 ------------------------------------------------------------
 Throughput:
   orders            = 10000000
-  trades            = 7315922
-  total elapsed     = 2405.359 ms
-  orders / sec      = 4157383.50
-  trades / sec      = 3041509.34
+  trades            = 7319334
+  total elapsed     = 2073.422 ms
+  orders / sec      = 4822945.58
+  trades / sec      = 3530074.95
 Latency (ns):
   samples           = 10000000
-  mean              = 174.2
-  stddev            = 7577.7
-  p10 / p50         = 43.1 / 122.1
-  p95 / p99 / p99.9 = 400.8 / 785.5 / 1646.5
-  min / max         = 18.9 / 12766894.4
+  mean              = 147.3
+  stddev            = 363.1
+  p50 / p95 / p99   = 125.7 / 317.5 / 555.0
 
 ============================================================
 Preset: cancel
@@ -84,17 +80,15 @@ Resolved profile:
 ------------------------------------------------------------
 Throughput:
   orders            = 10000000
-  trades            = 515076
-  total elapsed     = 1829.445 ms
-  orders / sec      = 5466139.92
-  trades / sec      = 281547.75
+  trades            = 515212
+  total elapsed     = 1766.592 ms
+  orders / sec      = 5660616.71
+  trades / sec      = 291641.77
 Latency (ns):
   samples           = 10000000
-  mean              = 115.5
-  stddev            = 401.9
-  p10 / p50         = 68.3 / 103.2
-  p95 / p99 / p99.9 = 191.8 / 272.3 / 462.0
-  min / max         = 13.9 / 683285.7
+  mean              = 115.4
+  stddev            = 319.2
+  p50 / p95 / p99   = 106.1 / 179.4 / 258.1
 
 ============================================================
 Preset: volatile
@@ -116,17 +110,15 @@ Resolved profile:
 ------------------------------------------------------------
 Throughput:
   orders            = 10000000
-  trades            = 7780133
-  total elapsed     = 2641.354 ms
-  orders / sec      = 3785936.41
-  trades / sec      = 2945508.88
+  trades            = 7780595
+  total elapsed     = 2472.950 ms
+  orders / sec      = 4043753.04
+  trades / sec      = 3146280.47
 Latency (ns):
   samples           = 10000000
-  mean              = 198.8
-  stddev            = 661.9
-  p10 / p50         = 42.4 / 154.5
-  p95 / p99 / p99.9 = 467.3 / 906.2 / 1970.7
-  min / max         = 18.2 / 547568.6
+  mean              = 186.9
+  stddev            = 456.4
+  p50 / p95 / p99   = 156.3 / 412.9 / 770.0
 
 ============================================================
 Preset: sweep
@@ -148,15 +140,13 @@ Resolved profile:
 ------------------------------------------------------------
 Throughput:
   orders            = 10000000
-  trades            = 8538651
-  total elapsed     = 2151.166 ms
-  orders / sec      = 4648642.13
-  trades / sec      = 3969313.27
+  trades            = 8543983
+  total elapsed     = 2246.268 ms
+  orders / sec      = 4451828.13
+  trades / sec      = 3803634.39
 Latency (ns):
   samples           = 10000000
-  mean              = 151.6
-  stddev            = 383.2
-  p10 / p50         = 37.4 / 122.1
-  p95 / p99 / p99.9 = 349.2 / 689.8 / 1450.4
-  min / max         = 18.2 / 283375.8
+  mean              = 166.1
+  stddev            = 2929.8
+  p50 / p95 / p99   = 140.6 / 361.0 / 684.9
 

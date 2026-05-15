@@ -67,7 +67,7 @@ No diff output means the sample matches.
 ```
 
 ```bash
-chrt 99 ./build/clang-19-release/bin/benchmark --orders 1000000 --iterations 3 --producer-cpu 2 --matcher-cpu 3 --stats-cpu 4
+chrt 99 ./build/clang-19-release/bin/benchmark --orders 1000000 --iterations 10 --producer-cpu 2 --matcher-cpu 3 --stats-cpu 4
 ```
 
 ## Test System Configuration

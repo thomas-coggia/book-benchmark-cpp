@@ -333,9 +333,13 @@ namespace matching::benchmark {
     std::println(out, "  samples           = {}", r.latency.sample_count);
     std::println(out, "  mean              = {:.1f}", r.latency.mean_ns);
     std::println(out, "  stddev            = {:.1f}", r.latency.stddev_ns);
-    std::println(out, "  p10 / p50         = {:.1f} / {:.1f}", r.latency.p10_ns, r.latency.p50_ns);
-    std::println(out, "  p95 / p99 / p99.9 = {:.1f} / {:.1f} / {:.1f}", r.latency.p95_ns, r.latency.p99_ns, r.latency.p99_9_ns);
-    std::println(out, "  min / max         = {:.1f} / {:.1f}", r.latency.min_ns, r.latency.max_ns);
+    std::println(
+      out,
+      "  p50 / p95 / p99   = {:.1f} / {:.1f} / {:.1f}",
+      r.latency.p50_ns,
+      r.latency.p95_ns,
+      r.latency.p99_ns
+    );
     std::println(out, "");
   }
 
