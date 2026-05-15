@@ -276,6 +276,7 @@ namespace matching::benchmark {
       std::println(out, "  num_orders        = {}", p.num_orders);
       std::println(out, "  cancel_ratio      = {:.4f}", p.cancel_ratio);
       std::println(out, "  aggressive_ratio  = {:.4f}", p.aggressive_ratio);
+      std::println(out, "  aggression_spread_k = {:.4f}", p.aggression_spread_k);
       std::println(out, "  buy_bias          = {:.4f}", p.buy_bias);
       std::println(out, "  mu                = {:.6f}", p.mu);
       std::println(out, "  sigma             = {:.6f}", p.sigma);

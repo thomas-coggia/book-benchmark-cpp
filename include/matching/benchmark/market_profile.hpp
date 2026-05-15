@@ -15,7 +15,7 @@ namespace matching::benchmark {
   /// emits exactly one Add or one Cancel (Cancel requires a resting order id). The scalar
   /// @c cancel_ratio is **not** the unconditional share of Cancel messages: it is @e P(Cancel |
   /// live book non-empty). Unconditional Add/Cancel proportions depend on starvation when the
-  /// book is empty and on overlays (continuous latent heat scaled with hot-side multipliers).
+  /// book is empty and on overlays (continuous latent heat and spread-conditioned aggression).
   struct market_profile_t {
     std::string_view name{};
 
@@ -24,7 +24,10 @@ namespace matching::benchmark {
 
     double cancel_ratio{};      ///< Baseline P(cancel | live book non-empty), calm regime.
     double aggressive_ratio{};  ///< Baseline P(Add crosses opposite touch), calm regime.
-    double buy_bias{};          ///< P(Buy) when drawing an uncorrelated side.
+    ///< Aggressive-add probability scale @f$\exp(-k\,s)@f$ after heat; @f$s@f$ = bid+ask half-width in
+    ///< ticks. @f$k=0@f$ disables spread feedback.
+    double aggression_spread_k{0.0};
+    double buy_bias{};  ///< P(Buy) when drawing an uncorrelated side.
 
     double mu{};
     double sigma{};
@@ -68,28 +71,29 @@ namespace matching::benchmark {
     std::int32_t spread_asym_ticks{0};
   };
 
-  /// Low crossed volume; stresses resting insertion and cancel unlink paths.
+  /// Deep passive liquidity; low toxicity and near-touch interaction.
   inline constexpr market_profile_t profile_quiet_build{
     .name = "quiet",
     .seed = 42,
     .num_orders = 1'000'000,
-    .cancel_ratio = 0.78,
+    .cancel_ratio = 0.84,
     .aggressive_ratio = 0.018,
+    .aggression_spread_k = 0.045,
     .buy_bias = 0.50,
     .mu = 0.0,
     .sigma = 0.00004,
     .initial_mid = 10'000,
     .tick_size = 1,
-    .place_decay = 0.52,
+    .place_decay = 0.62,
     .qty_log_mean = 2.0,
     .qty_log_stddev = 0.6,
     .qty_min = 1,
     .qty_max = 1'000,
-    .side_autocorr = 0.58,
-    .cancel_depth_lambda = 1.6,
-    .heat_mean = 0.24,
+    .side_autocorr = 0.60,
+    .cancel_depth_lambda = 1.8,
+    .heat_mean = 0.18,
     .heat_kappa = 0.038,
-    .heat_sigma = 0.048,
+    .heat_sigma = 0.025,
     .hot_cancel_mul = 1.12,
     .hot_aggressive_mul = 1.45,
     .hot_sigma_mul = 2.8,
@@ -98,27 +102,28 @@ namespace matching::benchmark {
     .spread_asym_ticks = 0,
   };
 
-  /// Mixed continuous trading; moderate aggression and heat-driven volatility bursts.
+  /// Tight liquid tape: competitive quotes and crossing without extreme diffusion (healthy liquidity regimes).
   inline constexpr market_profile_t profile_active_match{
     .name = "active",
     .seed = 42,
     .num_orders = 1'000'000,
-    .cancel_ratio = 0.86,
-    .aggressive_ratio = 0.26,
+    .cancel_ratio = 0.80,
+    .aggressive_ratio = 0.18,
+    .aggression_spread_k = 0.076,
     .buy_bias = 0.50,
     .mu = 0.0,
-    .sigma = 0.00042,
+    .sigma = 0.00018,
     .initial_mid = 10'000,
     .tick_size = 1,
-    .place_decay = 0.42,
+    .place_decay = 0.55,
     .qty_log_mean = 2.5,
     .qty_log_stddev = 0.8,
     .qty_min = 1,
     .qty_max = 1'000,
-    .side_autocorr = 0.62,
+    .side_autocorr = 0.64,
     .cancel_depth_lambda = 2.0,
-    .heat_mean = 0.30,
-    .heat_kappa = 0.042,
+    .heat_mean = 0.34,
+    .heat_kappa = 0.060,
     .heat_sigma = 0.058,
     .hot_cancel_mul = 1.08,
     .hot_aggressive_mul = 1.38,
@@ -133,21 +138,22 @@ namespace matching::benchmark {
     .name = "cancel",
     .seed = 42,
     .num_orders = 1'000'000,
-    .cancel_ratio = 0.92,
-    .aggressive_ratio = 0.034,
+    .cancel_ratio = 0.95,
+    .aggressive_ratio = 0.012,
+    .aggression_spread_k = 0.095,
     .buy_bias = 0.50,
     .mu = 0.0,
     .sigma = 0.00009,
     .initial_mid = 10'000,
     .tick_size = 1,
-    .place_decay = 0.46,
+    .place_decay = 0.55,
     .qty_log_mean = 2.0,
     .qty_log_stddev = 0.5,
     .qty_min = 1,
     .qty_max = 500,
-    .side_autocorr = 0.56,
-    .cancel_depth_lambda = 2.6,
-    .heat_mean = 0.20,
+    .side_autocorr = 0.52,
+    .cancel_depth_lambda = 2.4,
+    .heat_mean = 0.12,
     .heat_kappa = 0.032,
     .heat_sigma = 0.042,
     .hot_cancel_mul = 1.05,
@@ -158,64 +164,66 @@ namespace matching::benchmark {
     .spread_asym_ticks = 0,
   };
 
-  /// Elevated sigma with persistent heat swings and liquidity pullback mixes.
+  /// Stress from asymmetric liquidity, spread widening, and directional persistence rather than pure mid diffusion.
   inline constexpr market_profile_t profile_volatile{
     .name = "volatile",
     .seed = 42,
     .num_orders = 1'000'000,
-    .cancel_ratio = 0.63,
-    .aggressive_ratio = 0.15,
+    .cancel_ratio = 0.78,
+    .aggressive_ratio = 0.24,
+    .aggression_spread_k = 0.055,
     .buy_bias = 0.50,
     .mu = 0.0,
-    .sigma = 0.0035,
+    .sigma = 0.0020,
     .initial_mid = 10'000,
     .tick_size = 1,
-    .place_decay = 0.34,
+    .place_decay = 0.25,
     .qty_log_mean = 2.5,
     .qty_log_stddev = 0.8,
     .qty_min = 1,
     .qty_max = 1'000,
-    .side_autocorr = 0.60,
+    .side_autocorr = 0.74,
     .cancel_depth_lambda = 1.85,
-    .heat_mean = 0.40,
+    .heat_mean = 0.55,
     .heat_kappa = 0.026,
-    .heat_sigma = 0.092,
+    .heat_sigma = 0.14,
     .hot_cancel_mul = 1.22,
     .hot_aggressive_mul = 1.55,
-    .hot_sigma_mul = 3.2,
-    .hot_half_spread_extra_ticks = 2,
+    .hot_sigma_mul = 2.0,
+    .hot_half_spread_extra_ticks = 3,
     .base_half_spread_ticks = 1,
-    .spread_asym_ticks = 1,
+    .spread_asym_ticks = 2,
   };
 
-  /// Large sizes and aggression; matcher stress for multi-level consumption.
+  /// Directional execution stress: toxic flow, depleted queues, wide asymmetric quotes.
   inline constexpr market_profile_t profile_sweep{
     .name = "sweep",
     .seed = 42,
     .num_orders = 1'000'000,
-    .cancel_ratio = 0.38,
-    .aggressive_ratio = 0.52,
+    .cancel_ratio = 0.62,
+    .aggressive_ratio = 0.72,
+    .aggression_spread_k = 0.0,
     .buy_bias = 0.50,
     .mu = 0.0,
-    .sigma = 0.00075,
+    .sigma = 0.0012,
     .initial_mid = 10'000,
     .tick_size = 1,
-    .place_decay = 0.38,
+    .place_decay = 0.20,
     .qty_log_mean = 5.0,
     .qty_log_stddev = 1.0,
     .qty_min = 1,
     .qty_max = 10'000,
-    .side_autocorr = 0.68,
-    .cancel_depth_lambda = 1.2,
-    .heat_mean = 0.35,
+    .side_autocorr = 0.85,
+    .cancel_depth_lambda = 0.9,
+    .heat_mean = 0.60,
     .heat_kappa = 0.038,
     .heat_sigma = 0.068,
     .hot_cancel_mul = 1.18,
     .hot_aggressive_mul = 1.28,
     .hot_sigma_mul = 2.0,
-    .hot_half_spread_extra_ticks = 1,
+    .hot_half_spread_extra_ticks = 3,
     .base_half_spread_ticks = 1,
-    .spread_asym_ticks = 0,
+    .spread_asym_ticks = 2,
   };
 
 }  // namespace matching::benchmark

@@ -22,7 +22,8 @@ namespace matching::benchmark {
   /// Mid-price dynamics use log-normal stepping with volatility scaled by a latent heat @f$h\in[0,1]@f$
   /// (mean-reverting with Gaussian shocks). Passive Adds sit on a truncated exponential of depth from the
   /// current touch; aggressive Adds cross the far touch by a geometrically distributed tick distance.
-  /// Cancels may be depth-weighted toward the touch.
+  /// Cancels may be depth-weighted toward the touch. Crossing intensity scales down when the synthetic
+  /// bid–ask half-sum is wide unless @c aggression_spread_k is zero.
   class order_generator_t {
   public:
     explicit order_generator_t(const market_profile_t& profile) : profile_(profile), rng_(profile.seed) {
@@ -40,6 +41,8 @@ namespace matching::benchmark {
       double cancel_p = std::clamp(profile_.cancel_ratio * blend_hot_mul(profile_.hot_cancel_mul), 0.0, 0.999);
       double aggressive_p =
         std::clamp(profile_.aggressive_ratio * blend_hot_mul(profile_.hot_aggressive_mul), 0.0, 1.0);
+      aggressive_p *= aggression_spread_scale();
+      aggressive_p = std::clamp(aggressive_p, 0.0, 1.0);
 
       const bool want_cancel = !live_.empty() && uniform_(rng_) < cancel_p;
 
@@ -92,6 +95,17 @@ namespace matching::benchmark {
 
     [[nodiscard]] double blend_hot_mul(double hot_mul) const noexcept {
       return 1.0 + heat_ * (hot_mul - 1.0);
+    }
+
+    /// @f$\exp(-k\cdot s_{\mathrm{ticks}})@f$ for aggressive-add probability; 1 when @f$k\le 0@f$.
+    [[nodiscard]] double aggression_spread_scale() const noexcept {
+      if (profile_.aggression_spread_k <= 0.0) {
+        return 1.0;
+      }
+      const auto [bw, aw] = bid_ask_half_width_price();
+      const std::int32_t tick = std::max(profile_.tick_size, std::int32_t{1});
+      const double spread_ticks = static_cast<double>(bw + aw) / static_cast<double>(tick);
+      return std::exp(-profile_.aggression_spread_k * spread_ticks);
     }
 
     [[nodiscard]] std::pair<std::int64_t, std::int64_t> bid_ask_half_width_price() const noexcept {

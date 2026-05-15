@@ -6,34 +6,35 @@ Preset: quiet
 Resolved profile:
   seed              = 42
   num_orders        = 10000
-  cancel_ratio      = 0.7800
+  cancel_ratio      = 0.8400
   aggressive_ratio  = 0.0180
+  aggression_spread_k = 0.0450
   buy_bias          = 0.5000
   mu                = 0.000000
   sigma             = 0.000040
   initial_mid       = 10000
   tick_size         = 1
-  place_decay       = 0.5200
+  place_decay       = 0.6200
   qty_log_mean      = 2.0000
   qty_log_stddev    = 0.6000
   qty_min/qty_max   = 1 / 1000
-  side_autocorr     = 0.5800 (persist sides)
-  cancel_depth_lambda = 1.6000
-  heat mean/kappa/sigma = 0.2400 / 0.0380 / 0.0480
+  side_autocorr     = 0.6000 (persist sides)
+  cancel_depth_lambda = 1.8000
+  heat mean/kappa/sigma = 0.1800 / 0.0380 / 0.0250
   hot mul cancel/aggr/sigma = 1.120 / 1.450 / 2.800
   half-spread ticks base/hot_extra/asym = 1 / 1 / 0
 ------------------------------------------------------------
 Throughput:
   orders            = 100000
-  trades            = 60
-  total elapsed     = 18.281 ms
-  orders / sec      = 5470171.82
-  trades / sec      = 3282.10
+  trades            = 40
+  total elapsed     = 21.532 ms
+  orders / sec      = 4644166.71
+  trades / sec      = 1857.67
 Latency (ns):
   samples           = 100000
-  mean              = 104.8
-  stddev            = 255.3
-  p50 / p95 / p99   = 79.0 / 190.4 / 249.9
+  mean              = 127.6
+  stddev            = 584.1
+  p50 / p95 / p99   = 96.1 / 218.2 / 286.5
 
 ============================================================
 Preset: active
@@ -41,34 +42,35 @@ Preset: active
 Resolved profile:
   seed              = 42
   num_orders        = 10000
-  cancel_ratio      = 0.8600
-  aggressive_ratio  = 0.2600
+  cancel_ratio      = 0.8000
+  aggressive_ratio  = 0.1800
+  aggression_spread_k = 0.0760
   buy_bias          = 0.5000
   mu                = 0.000000
-  sigma             = 0.000420
+  sigma             = 0.000180
   initial_mid       = 10000
   tick_size         = 1
-  place_decay       = 0.4200
+  place_decay       = 0.5500
   qty_log_mean      = 2.5000
   qty_log_stddev    = 0.8000
   qty_min/qty_max   = 1 / 1000
-  side_autocorr     = 0.6200 (persist sides)
+  side_autocorr     = 0.6400 (persist sides)
   cancel_depth_lambda = 2.0000
-  heat mean/kappa/sigma = 0.3000 / 0.0420 / 0.0580
+  heat mean/kappa/sigma = 0.3400 / 0.0600 / 0.0580
   hot mul cancel/aggr/sigma = 1.080 / 1.380 / 2.200
   half-spread ticks base/hot_extra/asym = 1 / 1 / 0
 ------------------------------------------------------------
 Throughput:
   orders            = 100000
-  trades            = 650
-  total elapsed     = 17.237 ms
-  orders / sec      = 5801417.87
-  trades / sec      = 37709.22
+  trades            = 450
+  total elapsed     = 22.405 ms
+  orders / sec      = 4463250.54
+  trades / sec      = 20084.63
 Latency (ns):
   samples           = 100000
-  mean              = 105.6
-  stddev            = 275.7
-  p50 / p95 / p99   = 87.6 / 173.0 / 213.9
+  mean              = 116.9
+  stddev            = 202.5
+  p50 / p95 / p99   = 93.3 / 203.2 / 263.4
 
 ============================================================
 Preset: cancel
@@ -76,34 +78,35 @@ Preset: cancel
 Resolved profile:
   seed              = 42
   num_orders        = 10000
-  cancel_ratio      = 0.9200
-  aggressive_ratio  = 0.0340
+  cancel_ratio      = 0.9500
+  aggressive_ratio  = 0.0120
+  aggression_spread_k = 0.0950
   buy_bias          = 0.5000
   mu                = 0.000000
   sigma             = 0.000090
   initial_mid       = 10000
   tick_size         = 1
-  place_decay       = 0.4600
+  place_decay       = 0.5500
   qty_log_mean      = 2.0000
   qty_log_stddev    = 0.5000
   qty_min/qty_max   = 1 / 500
-  side_autocorr     = 0.5600 (persist sides)
-  cancel_depth_lambda = 2.6000
-  heat mean/kappa/sigma = 0.2000 / 0.0320 / 0.0420
+  side_autocorr     = 0.5200 (persist sides)
+  cancel_depth_lambda = 2.4000
+  heat mean/kappa/sigma = 0.1200 / 0.0320 / 0.0420
   hot mul cancel/aggr/sigma = 1.050 / 1.250 / 1.900
   half-spread ticks base/hot_extra/asym = 1 / 1 / 0
 ------------------------------------------------------------
 Throughput:
   orders            = 100000
-  trades            = 50
-  total elapsed     = 15.142 ms
-  orders / sec      = 6604162.30
-  trades / sec      = 3302.08
+  trades            = 40
+  total elapsed     = 36.546 ms
+  orders / sec      = 2736285.27
+  trades / sec      = 1094.51
 Latency (ns):
   samples           = 100000
-  mean              = 85.9
-  stddev            = 174.0
-  p50 / p95 / p99   = 75.5 / 126.4 / 154.5
+  mean              = 130.9
+  stddev            = 489.4
+  p50 / p95 / p99   = 105.0 / 217.5 / 281.2
 
 ============================================================
 Preset: volatile
@@ -111,34 +114,35 @@ Preset: volatile
 Resolved profile:
   seed              = 42
   num_orders        = 10000
-  cancel_ratio      = 0.6300
-  aggressive_ratio  = 0.1500
+  cancel_ratio      = 0.7800
+  aggressive_ratio  = 0.2400
+  aggression_spread_k = 0.0550
   buy_bias          = 0.5000
   mu                = 0.000000
-  sigma             = 0.003500
+  sigma             = 0.002000
   initial_mid       = 10000
   tick_size         = 1
-  place_decay       = 0.3400
+  place_decay       = 0.2500
   qty_log_mean      = 2.5000
   qty_log_stddev    = 0.8000
   qty_min/qty_max   = 1 / 1000
-  side_autocorr     = 0.6000 (persist sides)
+  side_autocorr     = 0.7400 (persist sides)
   cancel_depth_lambda = 1.8500
-  heat mean/kappa/sigma = 0.4000 / 0.0260 / 0.0920
-  hot mul cancel/aggr/sigma = 1.220 / 1.550 / 3.200
-  half-spread ticks base/hot_extra/asym = 1 / 2 / 1
+  heat mean/kappa/sigma = 0.5500 / 0.0260 / 0.1400
+  hot mul cancel/aggr/sigma = 1.220 / 1.550 / 2.000
+  half-spread ticks base/hot_extra/asym = 1 / 3 / 2
 ------------------------------------------------------------
 Throughput:
   orders            = 100000
-  trades            = 2360
-  total elapsed     = 16.517 ms
-  orders / sec      = 6054196.37
-  trades / sec      = 142879.03
+  trades            = 510
+  total elapsed     = 19.258 ms
+  orders / sec      = 5192721.08
+  trades / sec      = 26482.88
 Latency (ns):
   samples           = 100000
-  mean              = 95.1
-  stddev            = 167.8
-  p50 / p95 / p99   = 81.9 / 148.4 / 217.1
+  mean              = 111.2
+  stddev            = 327.8
+  p50 / p95 / p99   = 88.3 / 175.8 / 248.8
 
 ============================================================
 Preset: sweep
@@ -146,32 +150,33 @@ Preset: sweep
 Resolved profile:
   seed              = 42
   num_orders        = 10000
-  cancel_ratio      = 0.3800
-  aggressive_ratio  = 0.5200
+  cancel_ratio      = 0.6200
+  aggressive_ratio  = 0.7200
+  aggression_spread_k = 0.0000
   buy_bias          = 0.5000
   mu                = 0.000000
-  sigma             = 0.000750
+  sigma             = 0.001200
   initial_mid       = 10000
   tick_size         = 1
-  place_decay       = 0.3800
+  place_decay       = 0.2000
   qty_log_mean      = 5.0000
   qty_log_stddev    = 1.0000
   qty_min/qty_max   = 1 / 10000
-  side_autocorr     = 0.6800 (persist sides)
-  cancel_depth_lambda = 1.2000
-  heat mean/kappa/sigma = 0.3500 / 0.0380 / 0.0680
+  side_autocorr     = 0.8500 (persist sides)
+  cancel_depth_lambda = 0.9000
+  heat mean/kappa/sigma = 0.6000 / 0.0380 / 0.0680
   hot mul cancel/aggr/sigma = 1.180 / 1.280 / 2.000
-  half-spread ticks base/hot_extra/asym = 1 / 1 / 0
+  half-spread ticks base/hot_extra/asym = 1 / 3 / 2
 ------------------------------------------------------------
 Throughput:
   orders            = 100000
-  trades            = 54050
-  total elapsed     = 17.593 ms
-  orders / sec      = 5683992.50
-  trades / sec      = 3072197.95
+  trades            = 2320
+  total elapsed     = 19.038 ms
+  orders / sec      = 5252767.26
+  trades / sec      = 121864.20
 Latency (ns):
   samples           = 100000
-  mean              = 110.7
-  stddev            = 297.2
-  p50 / p95 / p99   = 79.0 / 265.2 / 483.0
+  mean              = 115.9
+  stddev            = 407.9
+  p50 / p95 / p99   = 100.4 / 176.5 / 253.4
 
