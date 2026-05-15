@@ -65,13 +65,11 @@ namespace matching::benchmark {
     latency_stats_t latency{};
   };
 
-  /// Printable rollup for one preset × iterations.
+  /// Rollup from @ref run_preset (orders/trades/latency); @ref print_preset_result emits resolved parameters plus
+  /// throughput and latency.
   struct preset_result_t {
     market_profile_t profile{};
     std::size_t total_orders{0};
-    std::size_t timed_stream_adds{0};
-    std::size_t timed_stream_cancels{0};
-    std::size_t timed_iterations{0};
     double mean_orders_per_sec{0.0};
     double mean_trades_per_sec{0.0};
     double total_elapsed_ns{0.0};
@@ -207,27 +205,12 @@ namespace matching::benchmark {
     benchmark_timer_init();
 
     preset_result_t agg{};
-    agg.profile = profile;
-
     latency_accumulator_t latency_global{profile.seed};
 
-    std::vector<input_event_t> events = detail::pre_generate(order_generator_t{profile}, cfg.warmup_events);
+    market_profile_t resolved_profile = profile;
+    agg.profile = resolved_profile;
 
-    {
-      const std::size_t begin = cfg.warmup_events;
-      const std::size_t end = cfg.warmup_events + profile.num_orders;
-      std::size_t adds = 0;
-      std::size_t cancels = 0;
-      for (std::size_t i = begin; i < end && i < events.size(); ++i) {
-        if (std::holds_alternative<add_order_event_t>(events[i])) {
-          ++adds;
-        } else if (std::holds_alternative<cancel_order_event_t>(events[i])) {
-          ++cancels;
-        }
-      }
-      agg.timed_stream_adds = adds;
-      agg.timed_stream_cancels = cancels;
-    }
+    std::vector<input_event_t> events = detail::pre_generate(order_generator_t{resolved_profile}, cfg.warmup_events);
 
     for (std::size_t remaining = cfg.iterations; remaining != 0; --remaining) {
       std::size_t trade_counter = 0;
@@ -271,7 +254,7 @@ namespace matching::benchmark {
       system.join();
       const double window_ns = bench_elapsed_ns(window_start);
 
-      agg.total_orders += profile.num_orders;
+      agg.total_orders += resolved_profile.num_orders;
       agg.total_trades += trade_counter;
       agg.total_elapsed_ns += window_ns;
     }
@@ -282,60 +265,56 @@ namespace matching::benchmark {
       agg.mean_trades_per_sec = static_cast<double>(agg.total_trades) / secs;
     }
     agg.latency = latency_global.snapshot();
-    agg.timed_iterations = cfg.iterations;
     return agg;
   }
 
-  /// Prints @ref preset_result_t (human-readable benchmark report).
+  namespace detail {
+
+    inline void print_resolved_profile(std::ostream& out, const market_profile_t& p) {
+      std::println(out, "Resolved profile:");
+      std::println(out, "  seed              = {}", p.seed);
+      std::println(out, "  num_orders        = {}", p.num_orders);
+      std::println(out, "  cancel_ratio      = {:.4f}", p.cancel_ratio);
+      std::println(out, "  aggressive_ratio  = {:.4f}", p.aggressive_ratio);
+      std::println(out, "  buy_bias          = {:.4f}", p.buy_bias);
+      std::println(out, "  mu                = {:.6f}", p.mu);
+      std::println(out, "  sigma             = {:.6f}", p.sigma);
+      std::println(out, "  initial_mid       = {}", p.initial_mid);
+      std::println(out, "  tick_size         = {}", p.tick_size);
+      std::println(out, "  place_decay       = {:.4f}", p.place_decay);
+      std::println(out, "  qty_log_mean      = {:.4f}", p.qty_log_mean);
+      std::println(out, "  qty_log_stddev    = {:.4f}", p.qty_log_stddev);
+      std::println(out, "  qty_min/qty_max   = {} / {}", p.qty_min, p.qty_max);
+      std::println(
+        out, "  side_autocorr     = {:.4f} ({})", p.side_autocorr, p.side_autocorr < 0.0 ? "IID sides" : "persist sides"
+      );
+      std::println(out, "  cancel_depth_lambda = {:.4f}", p.cancel_depth_lambda);
+      std::println(out, "  heat mean/kappa/sigma = {:.4f} / {:.4f} / {:.4f}", p.heat_mean, p.heat_kappa, p.heat_sigma);
+      std::println(
+        out,
+        "  hot mul cancel/aggr/sigma = {:.3f} / {:.3f} / {:.3f}",
+        p.hot_cancel_mul,
+        p.hot_aggressive_mul,
+        p.hot_sigma_mul
+      );
+      std::println(
+        out,
+        "  half-spread ticks base/hot_extra/asym = {} / {} / {}",
+        p.base_half_spread_ticks,
+        p.hot_half_spread_extra_ticks,
+        p.spread_asym_ticks
+      );
+    }
+
+  }  // namespace detail
+
+  /// Prints preset banner, resolved parameters (see @ref detail::print_resolved_profile), throughput, and latency.
   inline void print_preset_result(std::ostream& out, const preset_result_t& r) {
     const auto& p = r.profile;
     std::println(out, "============================================================");
     std::println(out, "Preset: {}", p.name);
     std::println(out, "------------------------------------------------------------");
-    std::println(out, "Resolved profile:");
-    std::println(out, "  seed              = {}", p.seed);
-    std::println(out, "  num_orders        = {}", p.num_orders);
-    std::println(out, "  cancel_ratio      = {:.4f}", p.cancel_ratio);
-    std::println(out, "  aggressive_ratio  = {:.4f}", p.aggressive_ratio);
-    std::println(out, "  buy_bias          = {:.4f}", p.buy_bias);
-    std::println(out, "  mu                = {:.6f}", p.mu);
-    std::println(out, "  sigma             = {:.6f}", p.sigma);
-    std::println(out, "  initial_mid       = {}", p.initial_mid);
-    std::println(out, "  tick_size         = {}", p.tick_size);
-    std::println(out, "  place_decay       = {:.4f}", p.place_decay);
-    std::println(out, "  qty_log_mean      = {:.4f}", p.qty_log_mean);
-    std::println(out, "  qty_log_stddev    = {:.4f}", p.qty_log_stddev);
-    std::println(out, "  qty_min/qty_max   = {} / {}", p.qty_min, p.qty_max);
-    std::println(
-      out, "  side_autocorr     = {:.4f} ({})", p.side_autocorr, p.side_autocorr < 0.0 ? "IID sides" : "persist sides"
-    );
-    std::println(out, "  cancel_depth_λ    = {:.4f}", p.cancel_depth_lambda);
-    std::println(out, "  markov enter/leave hot = {:.5f} / {:.5f}", p.markov_enter_hot_prob, p.markov_leave_hot_prob);
-    std::println(
-      out,
-      "  hot mul cancel/aggr/sigma = {:.3f} / {:.3f} / {:.3f}",
-      p.hot_cancel_mul,
-      p.hot_aggressive_mul,
-      p.hot_sigma_mul
-    );
-    std::println(out, "------------------------------------------------------------");
-    if (r.profile.num_orders != 0) {
-      const double denom = static_cast<double>(r.profile.num_orders);
-      const double add_share = static_cast<double>(r.timed_stream_adds) / denom;
-      const double cancel_share = static_cast<double>(r.timed_stream_cancels) / denom;
-      std::println(out, "Timed input mix (single iteration, adds+cancels = num_orders):");
-      std::println(out, "  adds / num_orders    = {:.5f}", add_share);
-      std::println(out, "  cancels / num_orders = {:.5f}", cancel_share);
-      std::println(out, "  sum (≈ 1)            = {:.5f}", add_share + cancel_share);
-    }
-    if (r.timed_stream_adds != 0 && r.timed_iterations != 0) {
-      const double adds_all_iters = static_cast<double>(r.timed_stream_adds) * static_cast<double>(r.timed_iterations);
-      std::println(
-        out,
-        "Execution intensity (aggregate): trades / timed-add ≈ {:.5f}",
-        static_cast<double>(r.total_trades) / adds_all_iters
-      );
-    }
+    detail::print_resolved_profile(out, p);
     std::println(out, "------------------------------------------------------------");
     std::println(out, "Throughput:");
     std::println(out, "  orders            = {}", r.total_orders);

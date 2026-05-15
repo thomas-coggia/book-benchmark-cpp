@@ -62,7 +62,7 @@ namespace benchmark_config {
       {"--producer-cpu <N>", "pin the producer agent to CPU N (omit to leave unpinned)"},
       {"--matcher-cpu <N>", "pin the matcher agent to CPU N (omit to leave unpinned)"},
       {"--stats-cpu <N>", "pin the stats agent to CPU N (omit to leave unpinned)"},
-      {"--cancel-ratio <F>", "override P(event = Cancel | live set non-empty)"},
+      {"--cancel-ratio <F>", "override live-book cancel probability P(Cancel | live set non-empty)"},
       {"--aggressive-ratio <F>", "override P(Add crosses opposite touch)"},
       {"--buy-bias <F>", "override P(side = Buy)"},
       {"--mu <F>", "override mid log-drift per step"},

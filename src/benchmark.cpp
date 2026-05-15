@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <print>
+#include <string>
 
 #include "app/benchmark_config.hpp"
 #include "matching/clob_factory.hpp"
