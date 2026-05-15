@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <ostream>
 #include <print>
@@ -97,13 +98,13 @@ namespace matching::benchmark {
         const std::vector<input_event_t>& events,
         std::size_t begin,
         std::size_t end,
-        order_queue_t& queue,
+        std::shared_ptr<order_queue_t> queue,
         std::stop_token token
       ) noexcept
         : events_(&events),
           begin_(begin),
           end_(end),
-          queue_(&queue),
+          queue_(std::move(queue)),
           token_(std::move(token)) {}
 
       void run() {
@@ -126,7 +127,7 @@ namespace matching::benchmark {
       const std::vector<input_event_t>* events_{nullptr};
       std::size_t begin_{0};
       std::size_t end_{0};
-      order_queue_t* queue_{nullptr};
+      std::shared_ptr<order_queue_t> queue_;
       std::stop_token token_;
     };
 
@@ -139,13 +140,13 @@ namespace matching::benchmark {
     class matcher_handler_t {
     public:
       matcher_handler_t(
-        Book& book,
-        stats_queue_t& stats,
+        Book book,
+        std::shared_ptr<stats_queue_t> stats,
         bool collect_latency,
         std::stop_token token
-      ) noexcept
-        : book_(&book),
-          stats_(&stats),
+      ) noexcept(std::is_nothrow_move_constructible_v<Book>)
+        : book_(std::move(book)),
+          stats_(std::move(stats)),
           collect_latency_(collect_latency),
           token_(std::move(token)) {}
 
@@ -156,10 +157,10 @@ namespace matching::benchmark {
         }
         if (collect_latency_) {
           const std::uint64_t mark = bench_mark();
-          (*book_)(event);
+          book_(event);
           push(stats_event_t{ping_t{bench_elapsed_ns(mark)}});
         } else {
-          (*book_)(event);
+          book_(event);
         }
         return false;
       }
@@ -175,8 +176,8 @@ namespace matching::benchmark {
         }
       }
 
-      Book* book_{nullptr};
-      stats_queue_t* stats_{nullptr};
+      Book book_;
+      std::shared_ptr<stats_queue_t> stats_;
       bool collect_latency_{true};
       std::stop_token token_;
     };
@@ -250,8 +251,8 @@ namespace matching::benchmark {
       }
       trade_counter = 0;
 
-      detail::order_queue_t order_queue;
-      detail::stats_queue_t stats_queue;
+      const auto order_queue = std::make_shared<detail::order_queue_t>();
+      const auto stats_queue = std::make_shared<detail::stats_queue_t>();
 
       std::stop_source source;
       const std::stop_token token = source.get_token();
@@ -259,12 +260,12 @@ namespace matching::benchmark {
       using book_type = std::remove_reference_t<decltype(book)>;
       detail::producer_loop_t producer{events, cfg.warmup_events, total_events, order_queue, token};
       auto matcher_loop = runtime::make_event_loop(
-        runtime::queue_source_t<detail::order_queue_t>{order_queue},
-        detail::matcher_handler_t<book_type>{book, stats_queue, cfg.collect_latency, token},
+        runtime::queue_source_shared_t<detail::order_queue_t>{order_queue},
+        detail::matcher_handler_t<book_type>{std::move(book), stats_queue, cfg.collect_latency, token},
         token
       );
       auto stats_loop = runtime::make_event_loop(
-        runtime::queue_source_t<detail::stats_queue_t>{stats_queue},
+        runtime::queue_source_shared_t<detail::stats_queue_t>{stats_queue},
         detail::stats_handler_t{latency_global},
         token
       );
