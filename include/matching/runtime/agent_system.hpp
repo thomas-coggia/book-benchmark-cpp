@@ -7,10 +7,10 @@
 
 namespace matching::runtime {
 
-  /// Composes N @ref agent_t instances and orchestrates their lifecycle. Holds a single
-  /// @c std::stop_source whose token is shared with every agent's event loop at construction
-  /// time, so a single @c request_stop() call (typically from the signal handler) flips every
-  /// agent at once.
+  /// Composes N @ref agent_t instances and orchestrates their lifecycle. Stores a
+  /// @c std::stop_source (by value; copies share the same stop state) whose token must match
+  /// the loops' tokens at construction time, so a single @c request_stop() flips every agent
+  /// at once.
   ///
   /// Two distinct shutdown modes are supported, mirroring the runtime's responsibility split:
   ///   - **Graceful**: the topmost producer pushes @ref matching::shutdown_t through the data
@@ -26,11 +26,11 @@ namespace matching::runtime {
   template <typename... Agents>
   class agent_system_t {
   public:
-    /// Construct from a stop_source by reference plus a pack of already-built agents.
-    /// The agents must have been built using @c stop_source.get_token() so they observe the
-    /// abort path; this is the convention enforced by the binary that owns this system.
-    explicit agent_system_t(std::stop_source& source, Agents... agents)
-      : stop_source_(&source), agents_(std::move(agents)...) {}
+    /// Construct from a stop_source (copied or moved in) plus a pack of already-built agents.
+    /// The agents must have been built using @c stop_source.get_token() from the same logical
+    /// stop state so they observe the abort path.
+    explicit agent_system_t(std::stop_source source, Agents... agents)
+      : stop_source_(std::move(source)), agents_(std::move(agents)...) {}
 
     agent_system_t(const agent_system_t&) = delete;
     agent_system_t& operator=(const agent_system_t&) = delete;
@@ -46,7 +46,7 @@ namespace matching::runtime {
     /// Request graceful abort on every agent. Cooperative: each loop will observe the stop
     /// before its next pop. The caller still needs to @ref join to wait for completion.
     void request_stop() noexcept {
-      stop_source_->request_stop();
+      stop_source_.request_stop();
     }
 
     /// Join every agent in reverse declaration order — the convention is that the last
@@ -57,7 +57,7 @@ namespace matching::runtime {
     }
 
     [[nodiscard]] std::stop_source& stop_source() noexcept {
-      return *stop_source_;
+      return stop_source_;
     }
 
   private:
@@ -73,17 +73,17 @@ namespace matching::runtime {
       (std::get<n - 1 - Is>(agents_).join(), ...);
     }
 
-    std::stop_source* stop_source_{nullptr};
+    std::stop_source stop_source_{};
     std::tuple<Agents...> agents_;
   };
 
   /// CTAD helper.
   template <typename... Agents>
-  agent_system_t(std::stop_source&, Agents...) -> agent_system_t<Agents...>;
+  agent_system_t(std::stop_source, Agents...) -> agent_system_t<Agents...>;
 
   template <typename... Agents>
-  [[nodiscard]] inline auto make_agent_system(std::stop_source& stop_src, Agents&&... agents) {
-    return agent_system_t<std::decay_t<Agents>...>(stop_src, std::forward<Agents>(agents)...);
+  [[nodiscard]] inline auto make_agent_system(std::stop_source stop_src, Agents&&... agents) {
+    return agent_system_t<std::decay_t<Agents>...>(std::move(stop_src), std::forward<Agents>(agents)...);
   }
 
 }  // namespace matching::runtime

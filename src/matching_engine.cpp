@@ -31,8 +31,7 @@ int main(int argc, char** argv) {
     const auto output_queue = std::make_shared<output_queue_t>();
 
     install_signal_handler();
-    std::stop_source& source = global_stop_source();
-    std::stop_token token = source.get_token();
+    std::stop_token token = global_stop_source().get_token();
 
     output_formatter_t formatter{std::cout};
     clob_factory_t<queue_emitter_t<queue_capacity_v>> factory{
@@ -58,7 +57,7 @@ int main(int argc, char** argv) {
     );
     auto writer_agent = make_agent(std::move(writer_loop), config.writer_cpu);
 
-    auto system = make_agent_system(source, std::move(reader_agent), std::move(matcher_agent), std::move(writer_agent));
+    auto system = make_agent_system(global_stop_source(), std::move(reader_agent), std::move(matcher_agent), std::move(writer_agent));
     system.start();
     system.join();
 

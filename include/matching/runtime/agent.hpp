@@ -32,8 +32,8 @@ namespace matching::runtime {
   }  // namespace detail
 
   /// One worker thread owning an @ref event_loop_t. The contained loop already carries the
-  /// system-wide @c std::stop_token (the @c agent_system_t owns the @c std::stop_source and
-  /// hands the same token to every loop at construction), so the agent does not need to
+  /// system-wide @c std::stop_token (the @c agent_system_t holds a @c std::stop_source sharing
+  /// that stop state with every loop at construction), so the agent does not need to
   /// inject anything here — its only responsibilities are starting the thread, optionally
   /// pinning the core, and joining on shutdown.
   ///

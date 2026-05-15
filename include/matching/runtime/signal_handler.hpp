@@ -5,13 +5,12 @@
 namespace matching::runtime {
 
   /// The single, process-global @c std::stop_source the signal handler flips on
-  /// @c SIGINT/@c SIGTERM. Lives for the entire process lifetime; the binary's
-  /// @c agent_system_t is built on top of @c global_stop_source().get_token() so a
-  /// single signal cleanly aborts every agent.
+  /// @c SIGINT/@c SIGTERM. It lives for the entire process lifetime; call sites pass a copy
+  /// (or use @c get_token()) into the runtime so one signal aborts every agent, since copies
+  /// share the same stop state.
   ///
   /// Implementation detail: the storage lives in @c src/signal_handler.cpp so there is a
-  /// single instance across all translation units. The reference returned here is bound to
-  /// that same object.
+  /// single canonical instance across all translation units.
   [[nodiscard]] std::stop_source& global_stop_source() noexcept;
 
   /// Install @c SIGINT and @c SIGTERM handlers that call @c request_stop() on the global
