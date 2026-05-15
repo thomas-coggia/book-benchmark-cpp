@@ -2,6 +2,8 @@
 
 Single-symbol central limit order book: read **CSV-style lines from stdin**, match with **price–time priority**, write trades and fills to **stdout**. **Parse errors** go to **stderr**; the process keeps parsing (no crash on garbage).
 
+This repo is a **deliberately improvable** sample: it avoids the last layers of proprietary tuning so nothing here reads as personal IP. The emphasis is **design**, **correctness**, and **maintainable code quality**, implemented as a **reasonable, STL-based** matching engine rather than a bleeding-edge exchange stack.
+
 For diagrams, data structures, and complexity notes, see **[`ARCHITECTURE.md`](ARCHITECTURE.md)**.
 
 ---
@@ -72,7 +74,7 @@ chrt 99 ./build/clang-19-release/bin/benchmark --orders 1000000 --iterations 10 
 
 ## Test System Configuration
 
-Bench runs (for example captures in [`benchmark.txt`](benchmark.txt)) use the setup below so you can compare your machine to the quoted numbers.
+Benchmark numbers (for example in [`benchmark.txt`](benchmark.txt)) were captured on a **consumer-grade laptop**; the setup below matches that machine so you can compare your own hardware to the quoted runs.
 
 **Hardware:**
 - Processor: Intel(R) Core(TM) i7-7700HQ CPU @ 2.80GHz (2.80 GHz)
