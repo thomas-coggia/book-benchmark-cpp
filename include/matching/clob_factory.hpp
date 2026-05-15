@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <memory>
 #include <utility>
 
 #include "matching/order_book.hpp"
@@ -26,6 +27,12 @@ namespace matching {
     /// emitter is move-consumed so the factory is single-shot by intent.
     [[nodiscard]] book_type create() && {
       return book_type{capacity_, std::move(emitter_)};
+    }
+
+    /// Same as @ref create but returns heap ownership. Use when the @ref clob_t must live in a
+    /// movable handle (the book type is immovable).
+    [[nodiscard]] std::unique_ptr<book_type> create_heap() && {
+      return std::make_unique<book_type>(capacity_, std::move(emitter_));
     }
 
     [[nodiscard]] std::size_t capacity() const noexcept {

@@ -19,3 +19,4 @@
 #include "matching/runtime/event_loop.hpp"
 #include "matching/runtime/signal_handler.hpp"
 #include "matching/runtime/spsc_queue.hpp"
+#include "matching/stream_pipeline.hpp"

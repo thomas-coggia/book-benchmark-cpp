@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <memory>
 #include <sstream>
 #include <stop_token>
 #include <string>
@@ -18,6 +19,7 @@
 #include "matching/runtime/agent_system.hpp"
 #include "matching/runtime/event_loop.hpp"
 #include "matching/runtime/spsc_queue.hpp"
+#include "matching/stream_pipeline.hpp"
 
 namespace matching {
 
@@ -29,109 +31,6 @@ namespace matching {
     constexpr std::size_t queue_capacity_v = 1u << 14;
     using order_queue_t = runtime::spsc_queue_t<input_event_t, queue_capacity_v>;
     using output_queue_t = runtime::spsc_queue_t<output_event_t, queue_capacity_v>;
-
-    class queue_emitter_t {
-    public:
-      queue_emitter_t(output_queue_t& queue, std::stop_token token) noexcept
-        : queue_(&queue), token_(std::move(token)) {}
-
-      void operator()(const trade_event_t& event) noexcept {
-        push(output_event_t{event});
-      }
-      void operator()(const order_fully_filled_t& event) noexcept {
-        push(output_event_t{event});
-      }
-      void operator()(const order_partially_filled_t& event) noexcept {
-        push(output_event_t{event});
-      }
-
-    private:
-      void push(const output_event_t& event) noexcept {
-        while (!token_.stop_requested() && !queue_->try_push(event)) {
-          runtime::cpu_pause();
-        }
-      }
-
-      output_queue_t* queue_{nullptr};
-      std::stop_token token_;
-    };
-
-    class reader_loop_t {
-    public:
-      reader_loop_t(std::istream& in, std::ostream& err, order_queue_t& queue, std::stop_token token) noexcept
-        : in_(&in), err_(&err), queue_(&queue), token_(std::move(token)) {}
-
-      void run() {
-        parse_stream(*in_, [this](const input_event_t& event) {
-          push(event);
-        }, *err_);
-        push(input_event_t{shutdown_t{}});
-      }
-
-    private:
-      void push(const input_event_t& event) noexcept {
-        while (!token_.stop_requested() && !queue_->try_push(event)) {
-          runtime::cpu_pause();
-        }
-      }
-
-      std::istream* in_{nullptr};
-      std::ostream* err_{nullptr};
-      order_queue_t* queue_{nullptr};
-      std::stop_token token_;
-    };
-
-    using book_t = clob_t<queue_emitter_t>;
-
-    class matcher_handler_t {
-    public:
-      matcher_handler_t(book_t& book, output_queue_t& out, std::stop_token token) noexcept
-        : book_(&book), out_(&out), token_(std::move(token)) {}
-
-      [[nodiscard]] bool operator()(const input_event_t& event) noexcept {
-        if (std::holds_alternative<shutdown_t>(event)) {
-          forward_shutdown();
-          return true;
-        }
-        (*book_)(event);
-        return false;
-      }
-
-    private:
-      void forward_shutdown() noexcept {
-        const output_event_t sentinel{shutdown_t{}};
-        while (!token_.stop_requested() && !out_->try_push(sentinel)) {
-          runtime::cpu_pause();
-        }
-      }
-
-      book_t* book_{nullptr};
-      output_queue_t* out_{nullptr};
-      std::stop_token token_;
-    };
-
-    class writer_handler_t {
-    public:
-      explicit writer_handler_t(output_formatter_t& formatter) noexcept
-        : formatter_(&formatter) {}
-
-      [[nodiscard]] bool operator()(const output_event_t& event) noexcept {
-        bool done = false;
-        std::visit([this, &done](const auto& concrete) {
-          using event_type = std::decay_t<decltype(concrete)>;
-          if constexpr (std::is_same_v<event_type, shutdown_t>) {
-            formatter_->sink().flush();
-            done = true;
-          } else {
-            (*formatter_)(concrete);
-          }
-        }, event);
-        return done;
-      }
-
-    private:
-      output_formatter_t* formatter_{nullptr};
-    };
 
   }  // namespace
 
@@ -154,30 +53,34 @@ namespace matching {
     memory_sink_t out;
     memory_sink_t err;
 
-    order_queue_t order_queue;
-    output_queue_t output_queue;
+    const auto order_queue = std::make_shared<order_queue_t>();
+    const auto output_queue = std::make_shared<output_queue_t>();
 
     std::stop_source source;
     const std::stop_token token = source.get_token();
 
     output_formatter_t formatter{out};
-    clob_factory_t<queue_emitter_t> factory{1024, queue_emitter_t{output_queue, token}};
-    book_t book = std::move(factory).create();
+    clob_factory_t<queue_emitter_t<queue_capacity_v>> factory{
+      1024,
+      queue_emitter_t<queue_capacity_v>{output_queue, token},
+    };
+    auto book = std::move(factory).create_heap();
 
-    reader_loop_t reader_loop{in, err, order_queue, token};
+    reader_loop_t<queue_capacity_v> reader_loop{in, err, order_queue, token};
     runtime::agent_t reader_agent{std::move(reader_loop), std::nullopt};
 
-    using matcher_loop_t = runtime::event_loop_t<runtime::queue_source_t<order_queue_t>, matcher_handler_t>;
+    using matcher_loop_t =
+      runtime::event_loop_t<runtime::queue_source_shared_t<order_queue_t>, matcher_handler_t<queue_capacity_v>>;
     matcher_loop_t matcher_loop{
-      runtime::queue_source_t<order_queue_t>{order_queue},
-      matcher_handler_t{book, output_queue, token},
+      runtime::queue_source_shared_t<order_queue_t>{order_queue},
+      matcher_handler_t<queue_capacity_v>{std::move(book), output_queue, token},
       token,
     };
     runtime::agent_t matcher_agent{std::move(matcher_loop), std::nullopt};
 
-    using writer_loop_t = runtime::event_loop_t<runtime::queue_source_t<output_queue_t>, writer_handler_t>;
+    using writer_loop_t = runtime::event_loop_t<runtime::queue_source_shared_t<output_queue_t>, writer_handler_t>;
     writer_loop_t writer_loop{
-      runtime::queue_source_t<output_queue_t>{output_queue},
+      runtime::queue_source_shared_t<output_queue_t>{output_queue},
       writer_handler_t{formatter},
       token,
     };
@@ -200,32 +103,32 @@ namespace matching {
   }
 
   TEST(EnginePipelineTest, AbortMidStreamJoinsCleanly) {
-    // No input source: the reader will block on stdin (it never gets one), but the
-    // production binary always feeds a real source. Here we exercise just the matcher and
-    // writer with no events queued, then trigger an abort and assert the system joins
-    // promptly (no hung loops).
-    order_queue_t order_queue;
-    output_queue_t output_queue;
+    const auto order_queue = std::make_shared<order_queue_t>();
+    const auto output_queue = std::make_shared<output_queue_t>();
 
     std::stop_source source;
     const std::stop_token token = source.get_token();
 
     memory_sink_t out;
     output_formatter_t formatter{out};
-    clob_factory_t<queue_emitter_t> factory{1024, queue_emitter_t{output_queue, token}};
-    book_t book = std::move(factory).create();
+    clob_factory_t<queue_emitter_t<queue_capacity_v>> factory{
+      1024,
+      queue_emitter_t<queue_capacity_v>{output_queue, token},
+    };
+    auto book = std::move(factory).create_heap();
 
-    using matcher_loop_t = runtime::event_loop_t<runtime::queue_source_t<order_queue_t>, matcher_handler_t>;
+    using matcher_loop_t =
+      runtime::event_loop_t<runtime::queue_source_shared_t<order_queue_t>, matcher_handler_t<queue_capacity_v>>;
     matcher_loop_t matcher_loop{
-      runtime::queue_source_t<order_queue_t>{order_queue},
-      matcher_handler_t{book, output_queue, token},
+      runtime::queue_source_shared_t<order_queue_t>{order_queue},
+      matcher_handler_t<queue_capacity_v>{std::move(book), output_queue, token},
       token,
     };
     runtime::agent_t matcher_agent{std::move(matcher_loop), std::nullopt};
 
-    using writer_loop_t = runtime::event_loop_t<runtime::queue_source_t<output_queue_t>, writer_handler_t>;
+    using writer_loop_t = runtime::event_loop_t<runtime::queue_source_shared_t<output_queue_t>, writer_handler_t>;
     writer_loop_t writer_loop{
-      runtime::queue_source_t<output_queue_t>{output_queue},
+      runtime::queue_source_shared_t<output_queue_t>{output_queue},
       writer_handler_t{formatter},
       token,
     };

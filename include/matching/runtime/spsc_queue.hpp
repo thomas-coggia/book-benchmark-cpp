@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdlib>
+#include <memory>
 #include <new>
 #include <type_traits>
 #include <utility>
@@ -122,6 +123,23 @@ namespace matching::runtime {
 
   private:
     Queue* queue_{nullptr};
+  };
+
+  /// Same as @ref queue_source_t but shares ownership of the queue via @c std::shared_ptr.
+  /// Use when the queue is referenced from multiple agents (e.g. producer + consumer).
+  template <typename Queue>
+  class queue_source_shared_t {
+  public:
+    using value_type = typename Queue::value_type;
+
+    explicit queue_source_shared_t(std::shared_ptr<Queue> q) noexcept : queue_(std::move(q)) {}
+
+    [[nodiscard]] bool try_pop(value_type& out) noexcept {
+      return queue_->try_pop(out);
+    }
+
+  private:
+    std::shared_ptr<Queue> queue_;
   };
 
 }  // namespace matching::runtime
