@@ -16,33 +16,32 @@ The **matching_engine** binary runs a **three-agent pipeline**: a reader pulls t
 ┌──────────┐
 │  stdin   │
 └────┬─────┘
-     │ lines (CSV msgtype)
-     ▼
+     │
+     v
 ┌─────────────────┐     ┌──────────────┐     ┌─────────────────┐
-│  Reader agent   │────▶│ Input queue  │────▶│  Matcher agent  │
-│  (thread 0)*    │     │   (SPSC)      │     │  (thread 1)*     │
-│                 │     │               │     │                 │
-│  · read line    │     │ input_event_t │     │  · clob_t match │
-│  · parse        │     │               │     │  · enqueue outs │
+│  Reader Agent   │---->│ Input Queue  │---->│ Matcher Agent   │
+│  (Thread 0)     │     │   (SPSC)     │     │  (Thread 1)     │
+│                 │     │              │     │                 │
+│ - Read line     │     │              │     │ - Match         │
+│ - Parse CSV     │     │              │     │ - Cancel        │
+│ - Push events   │     │              │     │ - Emit outs     │
 └────────┬────────┘     └──────────────┘     └────────┬────────┘
          │                                            │
-         │ malformed ────────────────────────────────┼──▶ stderr
-         │                                            │
-         │                                            ▼
-         │                                   ┌──────────────┐
-         │                                   │ Output queue │
-         │                                   │   (SPSC)      │
-         │                                   └──────┬───────┘
-         │                                          │
-         │                                          │ output_event_t
-         │                                          ▼
-         │                                   ┌──────────────┐
-         │                                   │ Writer agent │
-         │                                   │ (thread 2)*  │
-         │                                   │              │
-         │                                   │ · format line│
-         └── shutdown_t / stop token ────────┤ · stdout     │
-                                             └──────────────┘
+         │ malformed                                  │
+         v                                            v
+      stderr                                    ┌──────────────┐
+                                                │ Output Queue │
+                                                │   (SPSC)     │
+                                                └─────┬────────┘
+                                                      │
+                                                      v
+                                                ┌─────────────────┐
+                                                │ Writer Agent    │
+                                                │ (Thread 2)      │
+                                                │                 │
+                                                │ - Format        │
+                                                │ - Print         │
+                                                └─────────────────┘
 ```
 
 \*Threads can optionally be pinned to CPUs via CLI flags (`--reader-cpu`, `--matcher-cpu`, `--writer-cpu`).
