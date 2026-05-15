@@ -4,6 +4,13 @@ find_package(GTest REQUIRED)
 
 include(GoogleTest)
 
+set(MATCHING_REPO_ROOT "${CMAKE_SOURCE_DIR}")
+configure_file(
+  "${CMAKE_CURRENT_LIST_DIR}/generated/matching_test_res_dir.hpp.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/matching_test_res_dir.hpp"
+  @ONLY
+)
+
 set(MATCHING_TEST_FILES
   test_order_book.cpp
   test_input_parser.cpp
@@ -26,6 +33,8 @@ foreach(test_file IN LISTS MATCHING_TEST_FILES)
   target_compile_features(${test_name} PRIVATE cxx_std_23)
   gtest_discover_tests(${test_name})
 endforeach()
+
+target_include_directories(test_engine_pipeline PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 
 # Fuzzer target: opt-in via -DBUILD_FUZZERS=ON. Requires a clang toolchain with libFuzzer
 # (-fsanitize=fuzzer). Not part of ctest — run manually with a corpus / time budget.

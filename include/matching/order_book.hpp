@@ -280,14 +280,14 @@ namespace matching {
       std::visit([this](const auto& concrete) { (*this)(concrete); }, event);
     }
 
-    /// AddOrderRequest path: try to match the incoming order against the opposite side, then
+    /// Add order event path: try to match the incoming order against the opposite side, then
     /// rest any residual quantity on its own side.
-    void operator()(const add_order_request_t& event) {
+    void operator()(const add_order_event_t& event) {
       if (event.quantity <= 0) {
         return;  // No-op for non-positive quantities; the parser surfaces these as errors.
       }
 
-      add_order_request_t residual = event;
+      add_order_event_t residual = event;
       order_book_side_t& opposite = (event.side == side_t::buy) ? asks_ : bids_;
       match_against(opposite, residual);
 
@@ -296,8 +296,8 @@ namespace matching {
       }
     }
 
-    /// CancelOrderRequest path: @c std::pmr::unordered_map for ids; @c pmr::map for prices.
-    void operator()(const cancel_order_request_t& event) {
+    /// Cancel order event path: @c std::pmr::unordered_map for ids; @c pmr::map for prices.
+    void operator()(const cancel_order_event_t& event) {
       const auto it = lookup_.find(event.order_id);
       if (it == lookup_.end() || !it->second->active) {
         // Cancel of an unknown / already-filled / already-cancelled id: no-op (no crash, no output).
@@ -349,7 +349,7 @@ namespace matching {
 
     /// Walk price levels best-first, draining each level's intrusive chain until either the
     /// aggressive @p incoming is filled or the next level no longer crosses.
-    void match_against(order_book_side_t& opposite, add_order_request_t& incoming) {
+    void match_against(order_book_side_t& opposite, add_order_event_t& incoming) {
       while (incoming.quantity > 0) {
         const auto best = opposite.best_level();
         if (!best) {
@@ -369,7 +369,7 @@ namespace matching {
     /// Drain @p level head-first, trading @c min(aggressive, resting) per step. Removes
     /// fully-filled resting orders from the chain in place, but leaves the empty-level
     /// erasure to the caller so we never invalidate the iterator we were about to bump.
-    void match_level(order_book_side_t& opposite, price_level_t& level, price_t level_price, add_order_request_t& incoming) {
+    void match_level(order_book_side_t& opposite, price_level_t& level, price_t level_price, add_order_event_t& incoming) {
       order_node_t* cursor = level.head;
       while (cursor != nullptr && incoming.quantity > 0) {
         order_node_t* const resting = cursor;
@@ -435,11 +435,11 @@ namespace matching {
       (void) opposite;
     }
 
-    void rest_order(const add_order_request_t& residual) {
+    void rest_order(const add_order_event_t& residual) {
       order_node_t* const node =
         allocate_resting_node(residual.order_id, residual.side, residual.price, residual.quantity);
       if (!lookup_.try_emplace(residual.order_id, node).second) {
-        // Duplicate id. Roll back the node we just claimed so a malformed request does not corrupt the book.
+        // Duplicate id. Roll back the node we just claimed so a conflicting event does not corrupt the book.
         node->active = false;
         return;
       }

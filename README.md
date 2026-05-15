@@ -1,6 +1,6 @@
 # Limit-order matching engine
 
-Single-symbol central limit order book: read **CSV-style lines from stdin**, match with **price–time priority**, write trades and fills to **stdout**. Invalid lines go to **stderr**; the process keeps parsing (no crash on garbage).
+Single-symbol central limit order book: read **CSV-style lines from stdin**, match with **price–time priority**, write trades and fills to **stdout**. **Parse errors** go to **stderr**; the process keeps parsing (no crash on garbage).
 
 For diagrams, data structures, and complexity notes, see **[`ARCHITECTURE.md`](ARCHITECTURE.md)**.
 
@@ -46,19 +46,19 @@ Sanitizer directories use `-o '&:matching_preset=asan'` (or `ubsan`, `tsan`) wit
 ctest --test-dir build/clang-19-release --output-on-failure
 ```
 
-### 5. Run the engine on the sample file
+### 5. Run the engine on a recorded sample
 
 ```bash
-./build/clang-19-release/bin/matching_engine < res/sample_input.txt > out.txt
+./build/clang-19-release/bin/matching_engine < res/sample_1.input.txt > out.txt
 ```
 
-### 6. Compare with the expected output
+### 6. Compare with recorded stdout
 
 ```bash
-diff res/sample_output.txt out.txt
+diff res/sample_1.output.txt out.txt
 ```
 
-No diff output means the sample matches.
+No diff means the run matches the golden file. `EnginePipelineTest.GoldenRecordedStdoutMatchesSampleFiles` checks the same under `ctest`.
 
 ### 7. Optional: benchmark binary
 
@@ -103,7 +103,7 @@ Bench runs (for example captures in [`benchmark.txt`](benchmark.txt)) use the se
 - `side`: **0** = buy, **1** = sell.  
 - Blank lines and lines starting with **`#`** are skipped.  
 - Quantities and prices are integers (ticks) in this build.  
-- Full example: `res/sample_input.txt` → `res/sample_output.txt`.
+- Example recorded pair: `res/sample_1.input.txt` → `res/sample_1.output.txt`.
 
 ---
 

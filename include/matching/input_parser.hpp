@@ -65,7 +65,7 @@ namespace matching {
   enum class parse_status_t : std::uint8_t {
     ok = 0,        ///< The line yielded an event (forwarded to the handler).
     skipped = 1,   ///< Empty / whitespace-only / comment line — no event, no diagnostic.
-    error = 2,     ///< Malformed line — diagnostic emitted to the error sink.
+    error = 2,     ///< Ill-formed line — diagnostic emitted to the error sink.
   };
 
   /// Try to decode @p line into an @ref input_event_t. On success the variant is populated
@@ -94,7 +94,7 @@ namespace matching {
       const auto quantity = detail::parse_int<quantity_t>(detail::next_field(cursor));
       const auto price = detail::parse_int<price_t>(detail::next_field(cursor));
       if (!order_id || !side_raw || !quantity || !price || !cursor.empty()) {
-        std::println(err, "Malformed AddOrderRequest: {}", trimmed);
+        std::println(err, "Ill-formed AddOrderRequest: {}", trimmed);
         return parse_status_t::error;
       }
       if (*side_raw != 0 && *side_raw != 1) {
@@ -105,7 +105,7 @@ namespace matching {
         std::println(err, "Non-positive field in AddOrderRequest: {}", trimmed);
         return parse_status_t::error;
       }
-      out = add_order_request_t{
+      out = add_order_event_t{
         *order_id,
         static_cast<side_t>(*side_raw),
         *quantity,
@@ -117,14 +117,14 @@ namespace matching {
     if (*msgtype == 1) {
       const auto order_id = detail::parse_int<order_id_t>(detail::next_field(cursor));
       if (!order_id || !cursor.empty()) {
-        std::println(err, "Malformed CancelOrderRequest: {}", trimmed);
+        std::println(err, "Ill-formed CancelOrderRequest: {}", trimmed);
         return parse_status_t::error;
       }
       if (*order_id <= 0) {
         std::println(err, "Non-positive order id in CancelOrderRequest: {}", trimmed);
         return parse_status_t::error;
       }
-      out = cancel_order_request_t{*order_id};
+      out = cancel_order_event_t{*order_id};
       return parse_status_t::ok;
     }
 

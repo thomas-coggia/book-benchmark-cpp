@@ -93,10 +93,10 @@ namespace matching {
       std::visit(
         [&](const auto& concrete) {
           using event_type = std::decay_t<decltype(concrete)>;
-          if constexpr (std::is_same_v<event_type, add_order_request_t>) {
+          if constexpr (std::is_same_v<event_type, add_order_event_t>) {
             remaining.emplace(concrete.order_id, concrete.quantity);
             total_added_qty += concrete.quantity;
-          } else if constexpr (std::is_same_v<event_type, cancel_order_request_t>) {
+          } else if constexpr (std::is_same_v<event_type, cancel_order_event_t>) {
             auto it = remaining.find(concrete.order_id);
             if (it == remaining.end()) {
               ++cancelled_unknown;  // already filled or unknown — engine must accept silently
@@ -159,9 +159,9 @@ namespace matching {
       std::visit(
         [&](const auto& concrete) {
           using event_type = std::decay_t<decltype(concrete)>;
-          if constexpr (std::is_same_v<event_type, add_order_request_t>) {
+          if constexpr (std::is_same_v<event_type, add_order_event_t>) {
             resting.emplace(concrete.order_id, std::make_pair(concrete.side, concrete.price));
-          } else if constexpr (std::is_same_v<event_type, cancel_order_request_t>) {
+          } else if constexpr (std::is_same_v<event_type, cancel_order_event_t>) {
             resting.erase(concrete.order_id);
           }
         },

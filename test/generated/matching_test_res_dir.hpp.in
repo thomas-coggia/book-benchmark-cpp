@@ -1,0 +1,6 @@
+#pragma once
+
+#include <filesystem>
+
+/// Directory @c res/ under the repo root — path injected by CMake (`MATCHING_REPO_ROOT`).
+inline const std::filesystem::path matching_test_res_dir{"@MATCHING_REPO_ROOT@/res"};

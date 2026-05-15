@@ -1,0 +1,5 @@
+# Add then cancel; interleaved lines are ill-formed but must not stop the stream.
+0,401,0,10,95
+NOT_A_RECORD
+0,1,0,5
+1,401

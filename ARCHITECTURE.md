@@ -6,7 +6,7 @@ Companion to [`README.md`](README.md): how the process is structured end-to-end,
 
 ## System overview
 
-The **matching_engine** binary runs a **three-agent pipeline**: a reader pulls text lines from **stdin**, parses them into **input events**, a matcher owns a **header-only CLOB** (`clob_t`) and produces **output events**, and a writer formats lines to **stdout**. **SPSC queues** connect the stages. Parse errors are reported on **stderr**; matching continues. **SIGINT** / **SIGTERM** cooperate with `std::stop_source` so the threads can exit cleanly.
+The **matching_engine** binary runs a **three-agent pipeline**: a reader pulls text lines from **stdin**, parses them into **input events**, a matcher owns a **header-only CLOB** (`clob_t`) and produces **output events**, and a writer formats lines to **stdout**. **SPSC queues** connect the stages. **Parse errors** go to **stderr**; matching continues. **SIGINT** / **SIGTERM** cooperate with `std::stop_source` so the threads can exit cleanly.
 
 ---
 
@@ -27,7 +27,7 @@ The **matching_engine** binary runs a **three-agent pipeline**: a reader pulls t
 │ - Push events   │     │              │     │ - Emit outs     │
 └────────┬────────┘     └──────────────┘     └────────┬────────┘
          │                                            │
-         │ malformed                                  │
+         │ parse errors -> stderr                     │
          v                                            v
       stderr                                    ┌──────────────┐
                                                 │ Output Queue │
@@ -65,7 +65,7 @@ Text line
 **Variants (conceptually):**
 
 ```cpp
-input_event_t  = variant<add_order_request_t, cancel_order_request_t, shutdown_t>;
+input_event_t  = variant<add_order_event_t, cancel_order_event_t, shutdown_t>;
 output_event_t = variant<trade_event_t, order_fully_filled_t, order_partially_filled_t, shutdown_t>;
 ```
 
@@ -78,7 +78,7 @@ output_event_t = variant<trade_event_t, order_fully_filled_t, order_partially_fi
 1. **Reader (producer to input queue)**  
    - Reads stdin line-by-line.  
    - Uses `input_parser` / `parse_stream`; errors to **stderr**, continue.  
-   - Pushes `add_order_request_t`, `cancel_order_request_t`, or forwards **`shutdown_t`** after EOF.
+   - Pushes `add_order_event_t`, `cancel_order_event_t`, or forwards **`shutdown_t`** after EOF.
 
 2. **Matcher (consumer + producer)**  
    - Pops `input_event_t` from the input SPSC.  
@@ -129,7 +129,7 @@ test-7cc798/
 │   ├── test_agent.cpp
 │   ├── test_engine_pipeline.cpp
 │   └── …
-└── res/                        # golden stdin/stdout samples
+└── res/                        # sample_*.{input,output}.txt; optional sample_*.stderr.txt
 ```
 
 ---
@@ -161,7 +161,7 @@ test-7cc798/
 ### Input path
 
 - Newline-delimited lines via `std::getline`; streaming `parse_stream` on `std::istream` (stdin in the binary).  
-- Strict integer message-type prefixes; malformed lines → error on the configured `std::ostream` (stderr in the binary), stream continues.
+- Strict integer message-type prefixes; parse errors → error on the configured `std::ostream` (stderr in the binary), stream continues.
 
 ### Output path
 

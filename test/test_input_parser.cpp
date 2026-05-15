@@ -27,8 +27,8 @@ namespace matching {
     input_event_t evt{};
     const auto status = parse_line("0,42,1,7,1234", evt, err.sink());
     ASSERT_EQ(status, parse_status_t::ok);
-    ASSERT_TRUE(std::holds_alternative<add_order_request_t>(evt));
-    const auto& add = std::get<add_order_request_t>(evt);
+    ASSERT_TRUE(std::holds_alternative<add_order_event_t>(evt));
+    const auto& add = std::get<add_order_event_t>(evt);
     EXPECT_EQ(add.order_id, 42);
     EXPECT_EQ(add.side, side_t::sell);
     EXPECT_EQ(add.quantity, 7);
@@ -41,8 +41,8 @@ namespace matching {
     input_event_t evt{};
     const auto status = parse_line("1,42", evt, err.sink());
     ASSERT_EQ(status, parse_status_t::ok);
-    ASSERT_TRUE(std::holds_alternative<cancel_order_request_t>(evt));
-    EXPECT_EQ(std::get<cancel_order_request_t>(evt).order_id, 42);
+    ASSERT_TRUE(std::holds_alternative<cancel_order_event_t>(evt));
+    EXPECT_EQ(std::get<cancel_order_event_t>(evt).order_id, 42);
     EXPECT_TRUE(err.contents().empty());
   }
 
@@ -64,9 +64,9 @@ namespace matching {
   TEST(ParserTest, UnknownMessageTypeReportsError) {
     captured_err_t err;
     input_event_t evt{};
-    EXPECT_EQ(parse_line("BADMESSAGE", evt, err.sink()), parse_status_t::error);
+    EXPECT_EQ(parse_line("NOT_A_RECORD", evt, err.sink()), parse_status_t::error);
     const std::string captured = err.contents();
-    EXPECT_NE(captured.find("Unknown message type: BADMESSAGE"), std::string::npos);
+    EXPECT_NE(captured.find("Unknown message type: NOT_A_RECORD"), std::string::npos);
   }
 
   TEST(ParserTest, InvalidMsgTypeIntegerReportsError) {
@@ -80,14 +80,14 @@ namespace matching {
     captured_err_t err;
     input_event_t evt{};
     EXPECT_EQ(parse_line("0,1,0,5", evt, err.sink()), parse_status_t::error);
-    EXPECT_NE(err.contents().find("Malformed AddOrderRequest"), std::string::npos);
+    EXPECT_NE(err.contents().find("Ill-formed AddOrderRequest"), std::string::npos);
   }
 
   TEST(ParserTest, NonNumericFieldInAddReportsError) {
     captured_err_t err;
     input_event_t evt{};
     EXPECT_EQ(parse_line("0,abc,0,5,100", evt, err.sink()), parse_status_t::error);
-    EXPECT_NE(err.contents().find("Malformed AddOrderRequest"), std::string::npos);
+    EXPECT_NE(err.contents().find("Ill-formed AddOrderRequest"), std::string::npos);
   }
 
   TEST(ParserTest, OutOfRangeSideReportsError) {
@@ -111,18 +111,18 @@ namespace matching {
     EXPECT_NE(err.contents().find("Non-positive"), std::string::npos);
   }
 
-  TEST(ParserTest, MalformedCancelReportsError) {
+  TEST(ParserTest, IllFormedCancelReportsError) {
     captured_err_t err;
     input_event_t evt{};
     EXPECT_EQ(parse_line("1,abc", evt, err.sink()), parse_status_t::error);
-    EXPECT_NE(err.contents().find("Malformed CancelOrderRequest"), std::string::npos);
+    EXPECT_NE(err.contents().find("Ill-formed CancelOrderRequest"), std::string::npos);
   }
 
   TEST(ParserTest, ParseStreamRoutesEventsAndPreservesOrder) {
     captured_err_t err;
     const std::string in_str =
       "0,1,0,5,100\n"
-      "BADMESSAGE\n"
+      "NOT_A_RECORD\n"
       "1,1\n"
       "# trailing comment\n";
     std::istringstream in{in_str};
@@ -131,15 +131,15 @@ namespace matching {
     parse_stream(in, [&](const input_event_t& e) { collected.push_back(e); }, err.sink());
 
     ASSERT_EQ(collected.size(), 2u);
-    EXPECT_TRUE(std::holds_alternative<add_order_request_t>(collected[0]));
-    EXPECT_TRUE(std::holds_alternative<cancel_order_request_t>(collected[1]));
-    EXPECT_NE(err.contents().find("BADMESSAGE"), std::string::npos);
+    EXPECT_TRUE(std::holds_alternative<add_order_event_t>(collected[0]));
+    EXPECT_TRUE(std::holds_alternative<cancel_order_event_t>(collected[1]));
+    EXPECT_NE(err.contents().find("Unknown message type: NOT_A_RECORD"), std::string::npos);
   }
 
   TEST(ParserTest, RobustnessNoCrashOnGarbage) {
     captured_err_t err;
     input_event_t evt{};
-    // A pile of malformed inputs; only assertion is that none crash.
+    // Garbage lines; none must crash.
     EXPECT_EQ(parse_line(",,,,,", evt, err.sink()), parse_status_t::error);
     EXPECT_EQ(parse_line("0", evt, err.sink()), parse_status_t::error);
     EXPECT_EQ(parse_line("0,1", evt, err.sink()), parse_status_t::error);

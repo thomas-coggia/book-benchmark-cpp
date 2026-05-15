@@ -47,14 +47,14 @@ namespace matching::benchmark {
       const matching::input_event_t e = gen.next();
       std::visit([&](const auto& concrete) {
         using T = std::decay_t<decltype(concrete)>;
-        if constexpr (std::is_same_v<T, matching::add_order_request_t>) {
+        if constexpr (std::is_same_v<T, matching::add_order_event_t>) {
           ASSERT_GT(concrete.order_id, prev_add_id) << "Order ids must be strictly increasing";
           ASSERT_GT(concrete.quantity, 0);
           ASSERT_GT(concrete.price, 0);
           prev_add_id = concrete.order_id;
           added_ids.insert(concrete.order_id);
           ++adds;
-        } else if constexpr (std::is_same_v<T, matching::cancel_order_request_t>) {
+        } else if constexpr (std::is_same_v<T, matching::cancel_order_event_t>) {
           ASSERT_NE(added_ids.find(concrete.order_id), added_ids.end())
             << "Cancel must reference a previously added id";
           ++cancels;

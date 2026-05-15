@@ -48,7 +48,7 @@ namespace matching::benchmark {
         // irrelevant since cancels are uniform on the live set.
         live_ids_[i] = live_ids_.back();
         live_ids_.pop_back();
-        return cancel_order_request_t{id};
+        return cancel_order_event_t{id};
       }
 
       const order_id_t id = ++last_order_id_;
@@ -57,7 +57,7 @@ namespace matching::benchmark {
       const price_t price = sample_price(side);
 
       live_ids_.push_back(id);
-      return add_order_request_t{id, side, quantity, price};
+      return add_order_event_t{id, side, quantity, price};
     }
 
     /// Number of Add events generated whose ids are still in the live set (i.e. not yet

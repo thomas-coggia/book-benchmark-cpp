@@ -39,11 +39,11 @@ namespace matching {
       return clob_t<recorder_t>{clob_memory_t{capacity}, recorder_t{&events_}};
     }
 
-    static add_order_request_t buy(order_id_t id, quantity_t qty, price_t px) {
-      return add_order_request_t{id, side_t::buy, qty, px};
+    static add_order_event_t buy(order_id_t id, quantity_t qty, price_t px) {
+      return add_order_event_t{id, side_t::buy, qty, px};
     }
-    static add_order_request_t sell(order_id_t id, quantity_t qty, price_t px) {
-      return add_order_request_t{id, side_t::sell, qty, px};
+    static add_order_event_t sell(order_id_t id, quantity_t qty, price_t px) {
+      return add_order_event_t{id, side_t::sell, qty, px};
     }
 
     static const trade_event_t* as_trade(const event_record_t& r) {
@@ -178,7 +178,7 @@ namespace matching {
   TEST_F(OrderBookTest, CancelRemovesRestingOrder) {
     auto book = make_book();
     book(buy(1, 5, 100));
-    book(cancel_order_request_t{1});
+    book(cancel_order_event_t{1});
 
     EXPECT_TRUE(events_.empty());
     EXPECT_EQ(book.bid_depth(), 0u);
@@ -190,9 +190,9 @@ namespace matching {
 
   TEST_F(OrderBookTest, CancelOfUnknownIdIsNoop) {
     auto book = make_book();
-    book(cancel_order_request_t{42});
+    book(cancel_order_event_t{42});
     book(buy(1, 5, 100));
-    book(cancel_order_request_t{99});
+    book(cancel_order_event_t{99});
 
     EXPECT_TRUE(events_.empty());
     EXPECT_EQ(book.bid_depth(), 1u);
@@ -240,7 +240,7 @@ namespace matching {
     book(buy(1'000'004, 10, 950));
     book(sell(1'000'005, 2, 1025));
     book(buy(1'000'006, 1, 1000));
-    book(cancel_order_request_t{1'000'004});
+    book(cancel_order_event_t{1'000'004});
     book(sell(1'000'007, 5, 1025));
     EXPECT_TRUE(events_.empty());
 
@@ -289,13 +289,13 @@ namespace matching {
     book(buy(1, 5, 100));
     book(sell(2, 5, 100));   // 1 is fully filled.
     events_.clear();
-    book(cancel_order_request_t{1});  // Should be silently ignored.
+    book(cancel_order_event_t{1});  // Should be silently ignored.
     EXPECT_TRUE(events_.empty());
   }
 
   TEST_F(OrderBookTest, ZeroQuantityAddIsNoop) {
     auto book = make_book();
-    book(add_order_request_t{1, side_t::buy, 0, 100});
+    book(add_order_event_t{1, side_t::buy, 0, 100});
     EXPECT_TRUE(events_.empty());
     EXPECT_EQ(book.bid_depth(), 0u);
   }
