@@ -91,8 +91,8 @@ namespace matching {
     const std::filesystem::path root = matching_test_res_dir;
 
     for (const int ix : {1, 2, 3, 4, 5}) {
-      const std::filesystem::path in_path = root / ("sample_" + std::to_string(ix) + ".input.txt");
-      const std::filesystem::path out_path = root / ("sample_" + std::to_string(ix) + ".output.txt");
+      const std::filesystem::path in_path = root / ("sample_" + std::to_string(ix) + ".stdin.txt");
+      const std::filesystem::path out_path = root / ("sample_" + std::to_string(ix) + ".stdout.txt");
       const std::filesystem::path err_path = root / ("sample_" + std::to_string(ix) + ".stderr.txt");
 
       ASSERT_TRUE(std::filesystem::exists(in_path)) << "missing input " << in_path.string();

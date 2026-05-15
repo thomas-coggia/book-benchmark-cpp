@@ -51,13 +51,13 @@ ctest --test-dir build/clang-19-release --output-on-failure
 ### 5. Run the engine on a recorded sample
 
 ```bash
-./build/clang-19-release/bin/matching_engine < res/sample_1.input.txt > out.txt
+./build/clang-19-release/bin/matching_engine < res/sample_1.stdin.txt > out.txt
 ```
 
 ### 6. Compare with recorded stdout
 
 ```bash
-diff res/sample_1.output.txt out.txt
+diff res/sample_1.stdout.txt out.txt
 ```
 
 No diff means the run matches the golden file. `EnginePipelineTest.GoldenRecordedStdoutMatchesSampleFiles` checks the same under `ctest`.
@@ -110,7 +110,7 @@ Three-letter message tags (comma-separated fields; see `matching_engine --help`)
 - Side must be **`BUY`** or **`SLL`** (exact spelling).
 - Blank lines and lines starting with **`#`** are skipped.  
 - Quantities and prices are integers (ticks) in this build.  
-- Example recorded pair: `res/sample_1.input.txt` → `res/sample_1.output.txt`.
+- Example recorded pair: `res/sample_1.stdin.txt` → `res/sample_1.stdout.txt`.
 
 ---
 
