@@ -307,16 +307,18 @@ namespace matching {
     /// Allocate from @ref clob_memory_t::resting_order_resource (throws on OOM).
     [[nodiscard]] order_node_t* allocate_resting_node(order_id_t id, side_t side, price_t price, quantity_t qty) {
       void* const raw = memory_.resting_order_resource()->allocate(sizeof(order_node_t), alignof(order_node_t));
-      order_node_t* const node = static_cast<order_node_t*>(raw);
-      std::construct_at(node);
-      node->order_id = id;
-      node->price = price;
-      node->quantity = qty;
-      node->side = side;
-      node->active = true;
-      node->prev_same_price = nullptr;
-      node->next_same_price = nullptr;
-      return node;
+      return std::construct_at(
+        static_cast<order_node_t*>(raw),
+        order_node_t{
+          .order_id = id,
+          .price = price,
+          .quantity = qty,
+          .side = side,
+          .active = true,
+          .prev_same_price = nullptr,
+          .next_same_price = nullptr,
+        }
+      );
     }
 
     /// Walk opposite ladder best-first until @p incoming is flat or @ref order_book_side_t::crosses fails.
