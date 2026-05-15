@@ -21,14 +21,14 @@ Resolved profile:
 Throughput:
   orders            = 10000000
   trades            = 7976933
-  total elapsed     = 1940.624 ms
-  orders / sec      = 5152981.81
-  trades / sec      = 4110499.07
+  total elapsed     = 2447.448 ms
+  orders / sec      = 4085888.01
+  trades / sec      = 3259285.49
 Latency (ns):
   samples           = 10000000
-  mean              = 134.6
-  stddev            = 317.3
-  p50 / p95 / p99   = 117.5 / 267.0 / 479.9
+  mean              = 177.9
+  stddev            = 11313.0
+  p50 / p95 / p99   = 126.1 / 348.0 / 697.5
 
 ============================================================
 Preset: active
@@ -51,14 +51,14 @@ Resolved profile:
 Throughput:
   orders            = 10000000
   trades            = 7319334
-  total elapsed     = 2073.422 ms
-  orders / sec      = 4822945.58
-  trades / sec      = 3530074.95
+  total elapsed     = 2081.376 ms
+  orders / sec      = 4804513.64
+  trades / sec      = 3516584.00
 Latency (ns):
   samples           = 10000000
-  mean              = 147.3
-  stddev            = 363.1
-  p50 / p95 / p99   = 125.7 / 317.5 / 555.0
+  mean              = 148.0
+  stddev            = 388.1
+  p50 / p95 / p99   = 125.4 / 318.0 / 561.7
 
 ============================================================
 Preset: cancel
@@ -81,14 +81,14 @@ Resolved profile:
 Throughput:
   orders            = 10000000
   trades            = 515212
-  total elapsed     = 1766.592 ms
-  orders / sec      = 5660616.71
-  trades / sec      = 291641.77
+  total elapsed     = 1758.028 ms
+  orders / sec      = 5688192.51
+  trades / sec      = 293062.50
 Latency (ns):
   samples           = 10000000
-  mean              = 115.4
-  stddev            = 319.2
-  p50 / p95 / p99   = 106.1 / 179.4 / 258.1
+  mean              = 114.3
+  stddev            = 317.9
+  p50 / p95 / p99   = 105.4 / 177.6 / 251.5
 
 ============================================================
 Preset: volatile
@@ -111,14 +111,14 @@ Resolved profile:
 Throughput:
   orders            = 10000000
   trades            = 7780595
-  total elapsed     = 2472.950 ms
-  orders / sec      = 4043753.04
-  trades / sec      = 3146280.47
+  total elapsed     = 2556.577 ms
+  orders / sec      = 3911479.78
+  trades / sec      = 3043364.00
 Latency (ns):
   samples           = 10000000
-  mean              = 186.9
-  stddev            = 456.4
-  p50 / p95 / p99   = 156.3 / 412.9 / 770.0
+  mean              = 195.1
+  stddev            = 511.1
+  p50 / p95 / p99   = 161.5 / 432.3 / 823.2
 
 ============================================================
 Preset: sweep
@@ -141,12 +141,12 @@ Resolved profile:
 Throughput:
   orders            = 10000000
   trades            = 8543983
-  total elapsed     = 2246.268 ms
-  orders / sec      = 4451828.13
-  trades / sec      = 3803634.39
+  total elapsed     = 2223.098 ms
+  orders / sec      = 4498228.26
+  trades / sec      = 3843278.58
 Latency (ns):
   samples           = 10000000
-  mean              = 166.1
-  stddev            = 2929.8
-  p50 / p95 / p99   = 140.6 / 361.0 / 684.9
+  mean              = 162.4
+  stddev            = 3434.7
+  p50 / p95 / p99   = 138.3 / 354.5 / 678.9
 

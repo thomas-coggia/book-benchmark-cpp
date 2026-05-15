@@ -200,6 +200,19 @@ namespace matching::benchmark {
       latency_accumulator_t* acc_{nullptr};
     };
 
+    [[nodiscard]] inline std::vector<input_event_t> pre_generate(
+      order_generator_t gen,
+      std::size_t warmup_events
+    ) {
+      const std::size_t total_events = warmup_events + gen.profile().num_orders;
+      std::vector<input_event_t> events;
+      events.reserve(total_events);
+      for (std::size_t i = 0; i < total_events; ++i) {
+        events.emplace_back(gen.next());
+      }
+      return events;
+    }
+
   }  // namespace detail
 
   /// Runs @ref clob_t through a single preset for @c iterations rounds and aggregates
@@ -227,20 +240,9 @@ namespace matching::benchmark {
 
     latency_accumulator_t latency_global{profile.seed};
 
-    for (std::size_t iter = 0; iter < cfg.iterations; ++iter) {
-      // Independent generator per iteration: same seed family so the run is reproducible
-      // from the printed parameters, but each iteration starts from a clean book.
-      market_profile_t per_iter = profile;
-      per_iter.seed = profile.seed + static_cast<std::uint64_t>(iter);
-      order_generator_t gen{per_iter};
+    std::vector<input_event_t> events = detail::pre_generate(order_generator_t{profile}, cfg.warmup_events);
 
-      const std::size_t total_events = cfg.warmup_events + per_iter.num_orders;
-      std::vector<input_event_t> events;
-      events.reserve(total_events);
-      for (std::size_t i = 0; i < total_events; ++i) {
-        events.emplace_back(gen.next());
-      }
-
+    for (std::size_t remaining = cfg.iterations; remaining != 0; --remaining) {
       std::size_t trade_counter = 0;
       counting_emitter_t emitter{&trade_counter};
       auto book = std::move(make_factory(emitter)).create();
@@ -258,7 +260,7 @@ namespace matching::benchmark {
       const std::stop_token token = source.get_token();
 
       using book_type = std::remove_reference_t<decltype(book)>;
-      detail::producer_loop_t producer{events, cfg.warmup_events, total_events, order_queue, token};
+      detail::producer_loop_t producer{events, cfg.warmup_events, events.size(), order_queue, token};
       auto matcher_loop = runtime::make_event_loop(
         runtime::queue_source_shared_t<detail::order_queue_t>{order_queue},
         detail::matcher_handler_t<book_type>{std::move(book), stats_queue, cfg.collect_latency, token},
@@ -286,7 +288,7 @@ namespace matching::benchmark {
       system.join();
       const double window_ns = bench_elapsed_ns(window_start);
 
-      agg.total_orders += per_iter.num_orders;
+      agg.total_orders += profile.num_orders;
       agg.total_trades += trade_counter;
       agg.total_elapsed_ns += window_ns;
     }
