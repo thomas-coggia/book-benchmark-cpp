@@ -258,29 +258,27 @@ namespace matching::benchmark {
 
       using book_type = std::remove_reference_t<decltype(book)>;
       detail::producer_loop_t producer{events, cfg.warmup_events, total_events, order_queue, token};
-      using matcher_loop_type = runtime::event_loop_t<runtime::queue_source_t<detail::order_queue_t>, detail::matcher_handler_t<book_type>>;
-      matcher_loop_type matcher_loop{
+      auto matcher_loop = runtime::make_event_loop(
         runtime::queue_source_t<detail::order_queue_t>{order_queue},
         detail::matcher_handler_t<book_type>{book, stats_queue, cfg.collect_latency, token},
-        token,
-      };
-      using stats_loop_type = runtime::event_loop_t<runtime::queue_source_t<detail::stats_queue_t>, detail::stats_handler_t>;
-      stats_loop_type stats_loop{
+        token
+      );
+      auto stats_loop = runtime::make_event_loop(
         runtime::queue_source_t<detail::stats_queue_t>{stats_queue},
         detail::stats_handler_t{latency_global},
-        token,
-      };
+        token
+      );
 
-      runtime::agent_t producer_agent{std::move(producer), cfg.producer_cpu};
-      runtime::agent_t matcher_agent{std::move(matcher_loop), cfg.matcher_cpu};
-      runtime::agent_t stats_agent{std::move(stats_loop), cfg.stats_cpu};
+      auto producer_agent = runtime::make_agent(std::move(producer), cfg.producer_cpu);
+      auto matcher_agent = runtime::make_agent(std::move(matcher_loop), cfg.matcher_cpu);
+      auto stats_agent = runtime::make_agent(std::move(stats_loop), cfg.stats_cpu);
 
-      runtime::agent_system_t system{
+      auto system = runtime::make_agent_system(
         source,
         std::move(producer_agent),
         std::move(matcher_agent),
-        std::move(stats_agent),
-      };
+        std::move(stats_agent)
+      );
 
       const std::uint64_t window_start = bench_mark();
       system.start();

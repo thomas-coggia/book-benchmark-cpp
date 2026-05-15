@@ -45,13 +45,12 @@ namespace matching::runtime {
     std::atomic<std::size_t> counter{0};
     std::stop_source source;
 
-    using loop_type = event_loop_t<queue_source_t<queue_t>, counting_handler_t>;
-    loop_type loop{
+    auto loop = make_event_loop(
       queue_source_t<queue_t>{queue},
       counting_handler_t{&counter},
-      source.get_token(),
-    };
-    agent_t agent{std::move(loop), std::nullopt};
+      source.get_token()
+    );
+    auto agent = make_agent(std::move(loop), std::nullopt);
 
     agent.start();
 
@@ -76,13 +75,12 @@ namespace matching::runtime {
     std::atomic<std::size_t> counter{0};
     std::stop_source source;
 
-    using loop_type = event_loop_t<queue_source_t<queue_t>, counting_handler_t>;
-    loop_type loop{
+    auto loop = make_event_loop(
       queue_source_t<queue_t>{queue},
       counting_handler_t{&counter},
-      source.get_token(),
-    };
-    agent_t agent{std::move(loop), std::nullopt};
+      source.get_token()
+    );
+    auto agent = make_agent(std::move(loop), std::nullopt);
 
     agent.start();
     // No events pushed: the agent is busy-waiting in cpu_pause(). Request stop and verify
@@ -123,23 +121,21 @@ namespace matching::runtime {
       }
     };
 
-    using fwd_loop_t = event_loop_t<queue_source_t<queue_t>, forwarding_handler_t>;
-    fwd_loop_t fwd_loop{
+    auto fwd_loop = make_event_loop(
       queue_source_t<queue_t>{queue_a},
       forwarding_handler_t{&queue_b, token},
-      token,
-    };
-    agent_t fwd_agent{std::move(fwd_loop), std::nullopt};
+      token
+    );
+    auto fwd_agent = make_agent(std::move(fwd_loop), std::nullopt);
 
-    using cnt_loop_t = event_loop_t<queue_source_t<queue_t>, counting_handler_t>;
-    cnt_loop_t cnt_loop{
+    auto cnt_loop = make_event_loop(
       queue_source_t<queue_t>{queue_b},
       counting_handler_t{&downstream_counter},
-      token,
-    };
-    agent_t cnt_agent{std::move(cnt_loop), std::nullopt};
+      token
+    );
+    auto cnt_agent = make_agent(std::move(cnt_loop), std::nullopt);
 
-    agent_system_t system{source, std::move(fwd_agent), std::move(cnt_agent)};
+    auto system = make_agent_system(source, std::move(fwd_agent), std::move(cnt_agent));
     system.start();
 
     constexpr int n = 500;

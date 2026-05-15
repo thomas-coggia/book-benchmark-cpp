@@ -66,27 +66,24 @@ namespace matching {
     };
     auto book = std::move(factory).create();
 
-    reader_loop_t<queue_capacity_v> reader_loop{in, err, order_queue, token};
-    runtime::agent_t reader_agent{std::move(reader_loop), std::nullopt};
+    auto reader_loop = reader_loop_t<queue_capacity_v>{in, err, order_queue, token};
+    auto reader_agent = runtime::make_agent(std::move(reader_loop), std::nullopt);
 
-    using matcher_loop_t =
-      runtime::event_loop_t<runtime::queue_source_shared_t<order_queue_t>, matcher_handler_t<queue_capacity_v>>;
-    matcher_loop_t matcher_loop{
+    auto matcher_loop = runtime::make_event_loop(
       runtime::queue_source_shared_t<order_queue_t>{order_queue},
       matcher_handler_t<queue_capacity_v>{std::move(book), output_queue, token},
-      token,
-    };
-    runtime::agent_t matcher_agent{std::move(matcher_loop), std::nullopt};
+      token
+    );
+    auto matcher_agent = runtime::make_agent(std::move(matcher_loop), std::nullopt);
 
-    using writer_loop_t = runtime::event_loop_t<runtime::queue_source_shared_t<output_queue_t>, writer_handler_t>;
-    writer_loop_t writer_loop{
+    auto writer_loop = runtime::make_event_loop(
       runtime::queue_source_shared_t<output_queue_t>{output_queue},
       writer_handler_t{formatter},
-      token,
-    };
-    runtime::agent_t writer_agent{std::move(writer_loop), std::nullopt};
+      token
+    );
+    auto writer_agent = runtime::make_agent(std::move(writer_loop), std::nullopt);
 
-    runtime::agent_system_t system{source, std::move(reader_agent), std::move(matcher_agent), std::move(writer_agent)};
+    auto system = runtime::make_agent_system(source, std::move(reader_agent), std::move(matcher_agent), std::move(writer_agent));
     system.start();
     system.join();
 
@@ -117,24 +114,21 @@ namespace matching {
     };
     auto book = std::move(factory).create();
 
-    using matcher_loop_t =
-      runtime::event_loop_t<runtime::queue_source_shared_t<order_queue_t>, matcher_handler_t<queue_capacity_v>>;
-    matcher_loop_t matcher_loop{
+    auto matcher_loop = runtime::make_event_loop(
       runtime::queue_source_shared_t<order_queue_t>{order_queue},
       matcher_handler_t<queue_capacity_v>{std::move(book), output_queue, token},
-      token,
-    };
-    runtime::agent_t matcher_agent{std::move(matcher_loop), std::nullopt};
+      token
+    );
+    auto matcher_agent = runtime::make_agent(std::move(matcher_loop), std::nullopt);
 
-    using writer_loop_t = runtime::event_loop_t<runtime::queue_source_shared_t<output_queue_t>, writer_handler_t>;
-    writer_loop_t writer_loop{
+    auto writer_loop = runtime::make_event_loop(
       runtime::queue_source_shared_t<output_queue_t>{output_queue},
       writer_handler_t{formatter},
-      token,
-    };
-    runtime::agent_t writer_agent{std::move(writer_loop), std::nullopt};
+      token
+    );
+    auto writer_agent = runtime::make_agent(std::move(writer_loop), std::nullopt);
 
-    runtime::agent_system_t system{source, std::move(matcher_agent), std::move(writer_agent)};
+    auto system = runtime::make_agent_system(source, std::move(matcher_agent), std::move(writer_agent));
     system.start();
 
     const auto t0 = std::chrono::steady_clock::now();

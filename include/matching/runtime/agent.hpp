@@ -2,6 +2,7 @@
 
 #include <optional>
 #include <thread>
+#include <type_traits>
 #include <utility>
 
 #if defined(__linux__)
@@ -75,5 +76,10 @@ namespace matching::runtime {
   /// CTAD helper.
   template <typename EventLoop>
   agent_t(EventLoop, std::optional<int>) -> agent_t<EventLoop>;
+
+  template <typename EventLoop>
+  [[nodiscard]] inline auto make_agent(EventLoop&& loop, std::optional<int> cpu_id = std::nullopt) {
+    return agent_t<std::decay_t<EventLoop>>(std::forward<EventLoop>(loop), cpu_id);
+  }
 
 }  // namespace matching::runtime

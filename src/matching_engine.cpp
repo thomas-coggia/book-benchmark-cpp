@@ -41,26 +41,24 @@ int main(int argc, char** argv) {
     };
     auto book = std::move(factory).create();
 
-    reader_loop_t<queue_capacity_v> reader_loop{std::cin, std::cerr, order_queue, token};
-    agent_t reader_agent{std::move(reader_loop), config.reader_cpu};
+    auto reader_loop = reader_loop_t<queue_capacity_v>{std::cin, std::cerr, order_queue, token};
+    auto reader_agent = make_agent(std::move(reader_loop), config.reader_cpu);
 
-    using matcher_loop_t = event_loop_t<queue_source_shared_t<order_queue_t>, matcher_handler_t<queue_capacity_v>>;
-    matcher_loop_t matcher_loop{
+    auto matcher_loop = make_event_loop(
       queue_source_shared_t<order_queue_t>{order_queue},
       matcher_handler_t<queue_capacity_v>{std::move(book), output_queue, token},
-      token,
-    };
-    agent_t matcher_agent{std::move(matcher_loop), config.matcher_cpu};
+      token
+    );
+    auto matcher_agent = make_agent(std::move(matcher_loop), config.matcher_cpu);
 
-    using writer_loop_t = event_loop_t<queue_source_shared_t<output_queue_t>, writer_handler_t>;
-    writer_loop_t writer_loop{
+    auto writer_loop = make_event_loop(
       queue_source_shared_t<output_queue_t>{output_queue},
       writer_handler_t{formatter},
-      token,
-    };
-    agent_t writer_agent{std::move(writer_loop), config.writer_cpu};
+      token
+    );
+    auto writer_agent = make_agent(std::move(writer_loop), config.writer_cpu);
 
-    agent_system_t system{source, std::move(reader_agent), std::move(matcher_agent), std::move(writer_agent)};
+    auto system = make_agent_system(source, std::move(reader_agent), std::move(matcher_agent), std::move(writer_agent));
     system.start();
     system.join();
 

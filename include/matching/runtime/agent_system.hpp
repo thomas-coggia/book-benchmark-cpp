@@ -2,6 +2,7 @@
 
 #include <stop_token>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 
 namespace matching::runtime {
@@ -79,5 +80,10 @@ namespace matching::runtime {
   /// CTAD helper.
   template <typename... Agents>
   agent_system_t(std::stop_source&, Agents...) -> agent_system_t<Agents...>;
+
+  template <typename... Agents>
+  [[nodiscard]] inline auto make_agent_system(std::stop_source& stop_src, Agents&&... agents) {
+    return agent_system_t<std::decay_t<Agents>...>(stop_src, std::forward<Agents>(agents)...);
+  }
 
 }  // namespace matching::runtime

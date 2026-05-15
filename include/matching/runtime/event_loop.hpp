@@ -2,6 +2,7 @@
 
 #include <stop_token>
 #include <thread>
+#include <type_traits>
 #include <utility>
 
 #if defined(__x86_64__) || defined(__i386__)
@@ -69,5 +70,11 @@ namespace matching::runtime {
   /// CTAD helper.
   template <typename Source, typename Handler>
   event_loop_t(Source, Handler, std::stop_token) -> event_loop_t<Source, Handler>;
+
+  template <typename Source, typename Handler>
+  [[nodiscard]] inline auto make_event_loop(Source&& source, Handler&& handler, std::stop_token token) {
+    return event_loop_t<std::decay_t<Source>, std::decay_t<Handler>>(
+      std::forward<Source>(source), std::forward<Handler>(handler), std::move(token));
+  }
 
 }  // namespace matching::runtime
