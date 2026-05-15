@@ -19,9 +19,7 @@
 
 namespace matching {
 
-  /// One resting order: single cache-line-friendly record with scalar fields and intrusive
-  /// same-price list pointers. Stable address for the lifetime of the @ref clob_t (resting-order
-  /// @c monotonic_buffer_resource arena); pointers in levels and @c lookup_ are never invalidated by growth.
+  /// Resting order at one price (intrusive FIFO links); stable until retired from the resting PMR arena.
   struct alignas(64) order_node_t {
     order_id_t order_id{};
     price_t price{};
@@ -34,7 +32,6 @@ namespace matching {
 
   namespace detail {
 
-    /// Round @p size up to the next multiple of @p alignment (satisfies PMR @c allocate sizing).
     [[nodiscard]] constexpr std::size_t align_up(std::size_t size, std::size_t alignment) noexcept {
       return ((size + alignment - 1) / alignment) * alignment;
     }
@@ -48,9 +45,7 @@ namespace matching {
       return align_up(max_orders * per, 4096);
     }
 
-    /// Single contiguous backing block whose initial space seeds @c ladder_lookup_pool: @c pmr::map
-    /// nodes for bid/ask price ladders and @c pmr::unordered_map nodes for order-id lookup both draw
-    /// from that pool. Overflow uses the monotonic buffer's upstream (@c new_delete_resource).
+    /// Arena backing the ladder + lookup PMR pool (overflow to upstream resource).
     [[nodiscard]] constexpr std::size_t ladder_lookup_arena_byte_count(std::size_t capacity) noexcept {
       constexpr std::size_t per_level = 96;
       constexpr std::size_t ceiling = 32 * 1024 * 1024;
@@ -62,45 +57,36 @@ namespace matching {
 
   }  // namespace detail
 
-  /// Polymorphic allocator for the order-id lookup table (same @c ladder_lookup_pool as price ladders).
+  /// Allocator for order-id lookup (same PMR pool as ladders).
   using ladder_lookup_allocator_t = std::pmr::polymorphic_allocator<std::pair<const order_id_t, order_node_t*>>;
 
-  /// Intrusive FIFO chain head/tail for orders at one price (the @c std::map key on the side).
+  /// FIFO queue head/tail at one resting price.
   struct price_level_t {
     order_node_t* head{nullptr};
     order_node_t* tail{nullptr};
   };
 
-  /// PMR allocator for one price ladder (@c bids_ and @c asks_ share this type).
   using order_book_level_allocator_t = std::pmr::polymorphic_allocator<std::pair<const price_t, price_level_t>>;
 
-  /// Comparator for the resting-price @c std::pmr::map so the best level is always @c begin():
-  /// asks sort ascending (lowest ask first); bids sort descending (highest bid first).
-  /// @ref order_book_side_t::crosses uses the same comparator (negated strict ordering between limit prices).
+  /// Resting-price map order (asks ↑, bids ↓); best == begin(). Crossing uses !Compare(limit_aggressive,
+  /// limit_resting).
   template <side_t Side>
   using resting_levels_compare_t = std::conditional_t<Side == side_t::buy, std::greater<price_t>, std::less<price_t>>;
 
-  /// One side of the book (bids or asks). Levels live in a @c std::pmr::map keyed by price with
-  /// @ref resting_levels_compare_t so best-first matching always uses @c begin(), using the supplied
-  /// @c order_book_level_allocator_t (typically from @ref clob_memory_t::ladder_allocator).
-  /// Resting orders are @ref order_node_t records linked intrusively per level.
+  /// One resting ladder (buy or sell). Price levels are pmr::map keys; FIFO inside each level.
   ///
-  /// @tparam Side compile-time resting side (@c side_t::buy or @c side_t::sell); ladder ordering and
-  /// @ref crosses both derive from @ref resting_levels_compare_t.
+  /// @tparam Side Resting side (buy/sell); drives map comparator and crosses().
   template <side_t Side>
   class order_book_side_t {
   public:
     explicit order_book_side_t(order_book_level_allocator_t alloc) : levels_(alloc) {}
 
-    /// True if the resting order at @p resting_price would cross an aggressive order on this
-    /// side priced at @p aggressive_price. Uses @ref resting_levels_compare_t negated on the two
-    /// limits (@c asks: @c !(aggressive < resting); @c bids: @c !(aggressive > resting)).
+    /// Whether aggressive limit crosses resting quote at these prices (see resting_levels_compare_t).
     [[nodiscard]] bool crosses(price_t aggressive_price, price_t resting_price) const noexcept {
       return !resting_levels_compare_t<Side>{}(aggressive_price, resting_price);
     }
 
-    /// Append @p order to the tail of its price level (creating the level if needed),
-    /// maintaining FIFO time priority within the level.
+    /// Enqueue at tail of order's price level (creates level if needed).
     void append(order_node_t* order) {
       const price_t price = order->price;
       price_level_t& level = levels_.try_emplace(price).first->second;
@@ -118,9 +104,7 @@ namespace matching {
       }
     }
 
-    /// Detach @p order from its price level. If the level becomes empty it is dropped.
-    /// The order's own active flag is left to the caller (cancel vs. fill have different
-    /// retire semantics).
+    /// Unlink from price level; erase empty level. Caller owns active / lookup cleanup.
     void detach(order_node_t* order) noexcept {
       const price_t price = order->price;
       const auto it = levels_.find(price);
@@ -150,7 +134,7 @@ namespace matching {
       }
     }
 
-    /// Best level: always the map minimum under @ref resting_levels_compare_t (best bid / best ask).
+    /// Best-priced non-empty level, or nullopt.
     [[nodiscard]] std::optional<std::pair<price_t, price_level_t*>> best_level() noexcept {
       if (levels_.empty()) {
         return std::nullopt;
@@ -159,8 +143,7 @@ namespace matching {
       return std::pair<price_t, price_level_t*>{it->first, &it->second};
     }
 
-    /// Drop the best level. Used after the matching loop fully consumes it; callers must
-    /// already have unlinked all orders from the level's intrusive chain.
+    /// Erase best-priced level (caller must have emptied its FIFO chain).
     void pop_best_level() noexcept {
       if (!levels_.empty()) {
         levels_.erase(levels_.begin());
@@ -179,11 +162,7 @@ namespace matching {
     std::pmr::map<price_t, price_level_t, resting_levels_compare_t<Side>> levels_;
   };
 
-  /// Owns PMR backing for one @ref clob_t and exposes the polymorphic allocators / resources used by
-  /// the book. Typically constructed in @ref clob_factory_t (or tests) and moved into @c clob_t.
-  ///
-  /// Non-relocatable PMR objects live in a private heap block so @c clob_t can be moved while
-  /// @c ladder_lookup_pool and @c resting_order_mono keep stable addresses.
+  /// PMR storage for one book: ladder/lookup pool + separate resting arena (movable handle).
   class clob_memory_t {
     struct impl {
       std::size_t book_capacity;
@@ -205,7 +184,6 @@ namespace matching {
   public:
     explicit clob_memory_t(std::size_t book_capacity) : storage_(std::make_unique<impl>(book_capacity)) {}
 
-    /// Capacity hint this object was built with (arena sizing); used e.g. for @c lookup_ reserve.
     [[nodiscard]] std::size_t book_capacity() const noexcept {
       return storage_->book_capacity;
     }
@@ -218,7 +196,6 @@ namespace matching {
       return ladder_lookup_allocator_t{&storage_->ladder_lookup_pool};
     }
 
-    /// Monotonic resource for resting @ref order_node_t allocations (separate arena from ladder/lookup pool).
     [[nodiscard]] std::pmr::memory_resource* resting_order_resource() noexcept {
       return &storage_->resting_order_mono;
     }
@@ -232,34 +209,13 @@ namespace matching {
     std::unique_ptr<impl> storage_;
   };
 
-  /// The single-symbol Central Limit Order Book.
+  /// Single-symbol CLOB: Emitter receives trade_event_t, fill events, order_error_event_t.
   ///
-  /// **Allocation model** (bounded by @ref clob_memory_t sizing): @ref order_node_t objects are
-  /// allocated from @c resting_order_mono over @c resting_order_arena (@c detail::resting_order_arena_byte_count).
-  /// Bid/ask price ladders use @c std::pmr::map with side-specific ordering (@c std::greater for bids,
-  /// @c std::less for asks) so best-first traversal is always @c begin(), backed by @c ladder_lookup_pool
-  /// (seeded from @c ladder_lookup_mono / @c ladder_lookup_arena; @c detail::ladder_lookup_arena_byte_count).
-  /// Order-id
-  /// lookup is a @c std::pmr::unordered_map sharing that same pool. Resting slots are not reused after retire.
-  /// @ref clob_memory_t exposes polymorphic allocators and @c resting_order_resource; it is usually built
-  /// by @ref clob_factory_t.
-  ///
-  /// Templated on @c Emitter so the same matching path serves both the production binary
-  /// (where @c Emitter writes formatted lines to @c std::cout) and tests (where @c Emitter
-  /// collects events into vectors). The emitter must provide @c operator() for
-  /// @ref trade_event_t, @ref order_fully_filled_t, @ref order_partially_filled_t, and
-  /// @ref order_error_event_t.
-  ///
-  /// **Match-loop output ordering:** for every fill we emit
-  ///   1. @ref trade_event_t — the trade itself,
-  ///   2. OrderFullyFilled or OrderPartiallyFilled for the **aggressive** order,
-  ///   3. OrderFullyFilled or OrderPartiallyFilled for the **resting** order.
-  /// Any leftover quantity on the aggressive becomes a new resting order with no fill
-  /// line of its own — only orders involved in a trade emit fill events.
+  /// Resting nodes: monotonic arena. Ladders + id lookup share one PMR pool (best quote == map begin).
+  /// After each fill: trade, aggressive fill, resting fill; leftover aggressive qty may rest without a fill line.
   template <typename Emitter>
   class clob_t {
   public:
-    /// @p memory holds PMR arenas and allocators (typically from @ref clob_factory_t).
     explicit clob_t(clob_memory_t memory, Emitter emitter)
       : memory_(std::move(memory)),
         bids_{memory_.ladder_allocator()},
@@ -274,17 +230,11 @@ namespace matching {
     clob_t(clob_t&&) noexcept = default;
     clob_t& operator=(clob_t&&) noexcept = default;
 
-    /// Process a parsed input event. The @c std::visit cost compiles down to a single
-    /// branch on the variant index for our alternatives.
     void operator()(const input_event_t& event) {
       std::visit([this](const auto& concrete) { (*this)(concrete); }, event);
     }
 
-    /// Add order event path: try to match the incoming order against the opposite side, then
-    /// rest any residual quantity on its own side.
-    ///
-    /// Stateless field checks (positive @c order_id, @c quantity, @c price) emit
-    /// @ref order_error_event_t and skip matching; internal book invariants remain @c assert-gated.
+    /// Match opposite ladder; rest residue. Bad id/qty/price → order_error_event_t (no match).
     void operator()(const add_order_event_t& event) {
       if (event.order_id <= 0) {
         emitter_(order_error_event_t{event.order_id, order_error_kind_t::invalid_add_order_id});
@@ -311,7 +261,7 @@ namespace matching {
       }
     }
 
-    /// Cancel order event path: @c std::pmr::unordered_map for ids; @c pmr::map for prices.
+    /// Cancel by id; unknown/inactive → order_error_event_t.
     void operator()(const cancel_order_event_t& event) {
       if (event.order_id <= 0) {
         emitter_(order_error_event_t{event.order_id, order_error_kind_t::invalid_cancel_order_id});
@@ -332,10 +282,7 @@ namespace matching {
       lookup_.erase(it);
     }
 
-    /// Shutdown sentinel: no book mutation. The matcher agent is responsible for forwarding the
-    /// sentinel to the next stage before exiting; this overload exists only so the variant
-    /// dispatch in @c operator()(const input_event_t&) compiles uniformly across all
-    /// alternatives.
+    /// No-op (variant dispatch only).
     void operator()(const shutdown_t&) noexcept {}
 
     [[nodiscard]] const Emitter& emitter() const noexcept {
@@ -355,7 +302,6 @@ namespace matching {
     }
 
   private:
-    /// Allocates and value-initializes a node from @c memory_.resting_order_resource(). Throws on OOM.
     [[nodiscard]] order_node_t* allocate_resting_node(order_id_t id, side_t side, price_t price, quantity_t qty) {
       void* const raw = memory_.resting_order_resource()->allocate(sizeof(order_node_t), alignof(order_node_t));
       order_node_t* const node = static_cast<order_node_t*>(raw);
@@ -370,8 +316,7 @@ namespace matching {
       return node;
     }
 
-    /// Walk price levels best-first, draining each level's intrusive chain until either the
-    /// aggressive @p incoming is filled or the next level no longer crosses.
+    /// Consume visible liquidity on opposite side until filled or uncrossed.
     template <side_t OppositeSide>
     void match_against(order_book_side_t<OppositeSide>& opposite, add_order_event_t& incoming) {
       while (incoming.quantity > 0) {
@@ -390,9 +335,7 @@ namespace matching {
       }
     }
 
-    /// Drain @p level head-first, trading @c min(aggressive, resting) per step. Removes
-    /// fully-filled resting orders from the chain in place, but leaves the empty-level
-    /// erasure to the caller so we never invalidate the iterator we were about to bump.
+    /// Match FIFO at one price; caller pops empty levels.
     template <side_t OppositeSide>
     void match_level(
       order_book_side_t<OppositeSide>& opposite,
@@ -457,7 +400,7 @@ namespace matching {
       node->next_same_price = nullptr;
       node->active = false;
       lookup_.erase(node->order_id);
-      // Caller (@c match_against) drops the level itself when it sees @c level.head == nullptr.
+      // match_against erases the map entry once head == nullptr.
       (void)opposite;
     }
 
@@ -465,7 +408,7 @@ namespace matching {
       order_node_t* const node =
         allocate_resting_node(residual.order_id, residual.side, residual.price, residual.quantity);
       if (!lookup_.try_emplace(residual.order_id, node).second) {
-        // Duplicate id. Roll back the node we just claimed so a conflicting event does not corrupt the book.
+        // Duplicate id: discard allocated node (lookup unchanged).
         emitter_(order_error_event_t{residual.order_id, order_error_kind_t::duplicate_order_id});
         node->active = false;
         return;

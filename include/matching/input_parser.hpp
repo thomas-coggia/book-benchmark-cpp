@@ -15,7 +15,7 @@ namespace matching {
 
   namespace detail {
 
-    /// In-place trim of leading/trailing ASCII whitespace from a @c string_view.
+    /// Trim ASCII whitespace in-place.
     [[nodiscard]] inline std::string_view trim(std::string_view sv) noexcept {
       auto is_ws = [](char c) noexcept { return c == ' ' || c == '\t' || c == '\r' || c == '\n'; };
       while (!sv.empty() && is_ws(sv.front())) {
@@ -27,8 +27,7 @@ namespace matching {
       return sv;
     }
 
-    /// Pop the next comma-separated field from @p cursor, advancing past the delimiter.
-    /// Returns the field with leading/trailing whitespace already trimmed.
+    /// Next comma-separated field; trims; advances cursor.
     [[nodiscard]] inline std::string_view next_field(std::string_view& cursor) noexcept {
       const auto comma = cursor.find(',');
       std::string_view field;
@@ -42,8 +41,7 @@ namespace matching {
       return trim(field);
     }
 
-    /// Strict integer parser. Rejects empty input, non-numeric content, and surplus characters
-    /// after the number; returns @c std::nullopt on any of those.
+    /// Strict integer parse (whole field must be digits/sign only).
     template <typename Int>
     [[nodiscard]] inline std::optional<Int> parse_int(std::string_view sv) noexcept {
       if (sv.empty()) {
@@ -68,11 +66,7 @@ namespace matching {
     error = 2,    ///< Ill-formed line — diagnostic emitted to the error sink.
   };
 
-  /// Try to decode @p line into an @ref input_event_t. On success the variant is populated
-  /// and the function returns @c parse_status_t::ok. Comment and blank lines return @c
-  /// skipped. Any structural problem (unknown msgtype, missing or non-numeric fields,
-  /// out-of-range side / quantity / price) returns @c error and writes a single diagnostic
-  /// line to @p err.
+  /// Parse one line into out; on error writes one line to err.
   [[nodiscard]] inline parse_status_t parse_line(std::string_view line, input_event_t& out, std::ostream& err) {
     const std::string_view trimmed = detail::trim(line);
     if (trimmed.empty() || trimmed.front() == '#') {
@@ -132,9 +126,7 @@ namespace matching {
     return parse_status_t::error;
   }
 
-  /// Read newline-terminated lines from @p in, decode each via @ref parse_line, and forward
-  /// successful events to @p handler (any callable taking @c const input_event_t&). Errors
-  /// are written to @p err and processing continues on the next line.
+  /// Calls parse_line per line; invokes handler on ok; writes errors to err.
   template <typename Handler>
   inline void parse_stream(std::istream& in, Handler&& handler, std::ostream& err) {
     std::string line;

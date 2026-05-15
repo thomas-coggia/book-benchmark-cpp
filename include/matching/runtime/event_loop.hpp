@@ -11,9 +11,7 @@
 
 namespace matching::runtime {
 
-  /// CPU-friendly idle hint for a busy-spin loop. On x86 emits @c PAUSE, which throttles the
-  /// pipeline and avoids the memory-order-violation penalty on contended atomics; elsewhere
-  /// yields the thread to the scheduler so we do not burn a full core polling.
+  /// Busy-spin throttle (PAUSE on x86; yield elsewhere).
   inline void cpu_pause() noexcept {
 #if defined(__x86_64__) || defined(__i386__)
     _mm_pause();
@@ -22,28 +20,16 @@ namespace matching::runtime {
 #endif
   }
 
-  /// Generic poll loop that drives a @c Source by handing every popped event to a @c Handler.
+  /// Polls source.try_pop into handler until handler returns true (graceful sentinel) or stop_token stops (abort).
   ///
-  /// Termination policy mirrors the runtime's two-mode shutdown contract:
-  ///   - **Graceful** — the producer pushes @ref matching::shutdown_t through the data plane;
-  ///     the handler observes it and returns @c true to break the loop. This guarantees that
-  ///     every event already in the queue is drained.
-  ///   - **Abort** — @c stop_token.stop_requested() flips (typically from a signal handler).
-  ///     The loop exits before the next pop, possibly leaving in-flight events in the queue.
-  ///
-  /// @tparam Source  Concept: @c try_pop(T&) -> bool with a @c value_type alias.
-  /// @tparam Handler Concept: @c (event) -> bool, returns @c true to request termination
-  ///                 (i.e. the handler observed the in-band sentinel and finished its tail
-  ///                 work). A @c void-returning handler is also accepted via the
-  ///                 @ref drain_until template.
+  /// Source: try_pop(T&) -> bool, value_type. Handler: (event) -> bool (true = shut down).
   template <typename Source, typename Handler>
   class event_loop_t {
   public:
     explicit event_loop_t(Source source, Handler handler, std::stop_token token) noexcept
       : source_(std::move(source)), handler_(std::move(handler)), token_(std::move(token)) {}
 
-    /// Run until either the handler signals "done" (returns @c true on @ref matching::shutdown_t) or
-    /// the stop token is requested.
+    /// Runs until handler returns true or stop is requested.
     void run() {
       typename Source::value_type event{};
       while (!token_.stop_requested()) {
@@ -67,7 +53,6 @@ namespace matching::runtime {
     std::stop_token token_;
   };
 
-  /// CTAD helper.
   template <typename Source, typename Handler>
   event_loop_t(Source, Handler, std::stop_token) -> event_loop_t<Source, Handler>;
 

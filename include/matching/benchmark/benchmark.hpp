@@ -25,8 +25,7 @@
 
 namespace matching::benchmark {
 
-  /// Harness-only settings for a benchmark run: warmup, iteration count, optional CPU pinning, and
-  /// latency collection. Populated from the benchmark executable CLI alongside resolved profiles.
+  /// CLI-driven benchmark knobs (warmup, iterations, pinning, latency sampling).
   struct benchmark_config_t {
     std::size_t warmup_events{10'000};
     std::size_t iterations{5};
@@ -36,9 +35,7 @@ namespace matching::benchmark {
     std::optional<int> stats_cpu{};
   };
 
-  /// Outputs the matcher tracks during the timed window. Trade count is incremented on the
-  /// matcher thread (no synchronisation), then read on the main thread after the agent
-  /// system joins — the join boundary publishes the counter cleanly.
+  /// Trade tally on matcher thread; consumer reads after agent join.
   struct counting_emitter_t {
     std::size_t* trade_count{nullptr};
 
@@ -53,17 +50,14 @@ namespace matching::benchmark {
     void operator()(const order_error_event_t&) const noexcept {}
   };
 
-  /// One latency sample shipped from the matcher to the stats agent: elapsed time for one
-  /// `book(event)` call in nanoseconds (via @ref bench_elapsed_ns).
+  /// One matcher timing sample (nanoseconds).
   struct ping_t {
     double latency_ns{0.0};
   };
 
-  /// Stats-queue payload: either a real latency sample or the same @ref matching::shutdown_t
-  /// sentinel used on the order queue (end of pipeline on this channel).
+  /// Stats queue payload: ping_t sample or shutdown_t.
   using stats_event_t = std::variant<ping_t, shutdown_t>;
 
-  /// Per-iteration result. Aggregated across iterations into @ref preset_result_t.
   struct iteration_result_t {
     double elapsed_ns{0.0};
     std::size_t orders_processed{0};
@@ -71,7 +65,7 @@ namespace matching::benchmark {
     latency_stats_t latency{};
   };
 
-  /// Final, printable result for one preset across all iterations.
+  /// Printable rollup for one preset × iterations.
   struct preset_result_t {
     market_profile_t profile{};
     std::size_t total_orders{0};
@@ -84,18 +78,12 @@ namespace matching::benchmark {
 
   namespace detail {
 
-    /// Default queue depth for the benchmark's SPSC pair. 65,536 leaves enough head-room
-    /// for the matcher to lag the producer by tens of milliseconds without stalling, while
-    /// keeping queue memory under one MiB even with the largest event variant.
     inline constexpr std::size_t queue_capacity_v = 1u << 16;
 
     using order_queue_t = runtime::spsc_queue_t<input_event_t, queue_capacity_v>;
     using stats_queue_t = runtime::spsc_queue_t<stats_event_t, queue_capacity_v>;
 
-    /// Producer agent: pushes pre-generated events into the order queue in a tight loop,
-    /// then injects a single @ref matching::shutdown_t to terminate the downstream chain.
-    /// The push spin checks the stop token so an abort does not deadlock when the matcher
-    /// has already stopped consuming.
+    /// Feeds order queue then shutdown_t; spins on push until stop if backed up.
     class producer_loop_t {
     public:
       producer_loop_t(
@@ -131,11 +119,7 @@ namespace matching::benchmark {
       std::stop_token token_;
     };
 
-    /// Matcher handler: brackets every real event with @ref bench_mark / @ref bench_elapsed_ns,
-    /// ships nanoseconds as @ref ping_t to the stats queue, then forwards @ref matching::shutdown_t
-    /// before terminating.
-    /// The latency sample is only collected when @c collect_latency is true; otherwise the
-    /// matcher remains a single-pop / single-call tight loop.
+    /// Runs book(event); optionally timestamps into stats queue; forwards shutdown_t.
     template <typename Book>
     class matcher_handler_t {
     public:
@@ -182,7 +166,7 @@ namespace matching::benchmark {
       std::stop_token token_;
     };
 
-    /// Stats handler: pops ping_t / shutdown_t and feeds the accumulator.
+    /// Consumes ping_t into latency accumulator; shutdown_t ends loop.
     class stats_handler_t {
     public:
       explicit stats_handler_t(latency_accumulator_t& acc) noexcept : acc_(&acc) {}
@@ -212,18 +196,7 @@ namespace matching::benchmark {
 
   }  // namespace detail
 
-  /// Runs @ref clob_t through a single preset for @c iterations rounds and aggregates
-  /// throughput / latency. @p make_factory must return a fresh book for each timed iteration
-  /// (typically @ref clob_factory_t::create).
-  ///
-  /// **Topology**:
-  /// @code
-  ///   [producer agent] --input_event_t--> [matcher agent] --ping_t--> [stats agent]
-  ///                     spsc_queue<...>                    spsc_queue<...>
-  /// @endcode
-  /// The matcher timestamps each event with @ref bench_mark / @ref bench_elapsed_ns and pushes
-  /// @ref ping_t; the latency accumulator runs on the stats agent so Welford / reservoir cost
-  /// cannot inflate the reported per-event latency.
+  /// Runs cfg.iterations of producer→matcher→stats; optional latency samples from matcher, aggregated on stats agent.
   template <typename MakeFactory>
   [[nodiscard]] inline preset_result_t
   run_preset(const market_profile_t& profile, const benchmark_config_t& cfg, MakeFactory&& make_factory) {
@@ -241,7 +214,7 @@ namespace matching::benchmark {
       counting_emitter_t emitter{&trade_counter};
       auto book = std::move(make_factory(emitter)).create();
 
-      // Warmup phase: drive the book directly with no agent overhead, no timing.
+      // Warm path without queue/agents.
       for (std::size_t i = 0; i < cfg.warmup_events; ++i) {
         book(events[i]);
       }
@@ -292,9 +265,7 @@ namespace matching::benchmark {
     return agg;
   }
 
-  /// Print one preset's resolved parameters and aggregated metrics. Each block is
-  /// self-contained so a reviewer can reproduce any printed number from the header and field
-  /// list alone.
+  /// Prints preset_result_t (human-readable benchmark report).
   inline void print_preset_result(std::ostream& out, const preset_result_t& r) {
     const auto& p = r.profile;
     std::println(out, "============================================================");

@@ -20,9 +20,7 @@
 
 namespace matching {
 
-  /// Emitter the @ref clob_t writes through. Wraps each trade / fill in @ref output_event_t
-  /// and pushes it onto the matcher → writer queue. The push spin is stop-aware so an abort
-  /// (via the global stop_source) does not deadlock the matcher when the writer has died.
+  /// Routes book output into output_event_t on the matcher→writer queue; spin yields if full or stopping.
   template <std::size_t Capacity>
   class queue_emitter_t {
   public:
@@ -58,10 +56,7 @@ namespace matching {
     std::stop_token token_;
   };
 
-  /// Reader loop: pulls newline-terminated lines from @c std::cin via @ref parse_stream,
-  /// pushes each parsed event onto the order queue, and finishes the stream by pushing an
-  /// in-band @ref matching::shutdown_t before returning. Parse errors continue to be reported
-  /// to @p err by @ref parse_stream itself.
+  /// Reads lines → parse_stream → order queue; ends with shutdown_t.
   template <std::size_t Capacity>
   class reader_loop_t {
   public:
@@ -93,9 +88,7 @@ namespace matching {
     std::stop_token token_;
   };
 
-  /// Matcher handler used by the generic @c event_loop_t. Owns the CLOB and forwards real
-  /// events into it; on @ref matching::shutdown_t it relays the same sentinel downstream and
-  /// returns @c true so the loop terminates.
+  /// Applies events to clob_t; forwards shutdown_t downstream and ends the loop (returns true).
   template <std::size_t Capacity>
   class matcher_handler_t {
   public:
@@ -128,9 +121,7 @@ namespace matching {
     std::stop_token token_;
   };
 
-  /// Writer handler. Visits the variant: real output events go through the formatter;
-  /// @ref matching::shutdown_t triggers a final @c flush on the formatter sink and terminates
-  /// the loop.
+  /// Formats output_event_t lines; shutdown_t triggers flush and loop exit (handler returns true).
   class writer_handler_t {
   public:
     explicit writer_handler_t(output_formatter_t& formatter) noexcept : formatter_(formatter) {}

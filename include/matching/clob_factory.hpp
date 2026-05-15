@@ -7,12 +7,7 @@
 
 namespace matching {
 
-  /// Concrete factory that constructs a @ref clob_t with a pre-decided capacity and emitter.
-  /// Shared by the `matching_engine` and `benchmark` binaries so both use the same construction
-  /// path; the only template parameter is the static @c Emitter type.
-  ///
-  /// @c create() is a one-shot prvalue producer; mandatory copy elision (C++17) can construct
-  /// the @ref clob_t handle without extra moves of the heavy implementation object.
+  /// Builds clob_t(memory, emitter); create() consumes emitter (NRVO-friendly).
   template <typename Emitter>
   class clob_factory_t {
   public:
@@ -22,9 +17,6 @@ namespace matching {
     constexpr clob_factory_t(std::size_t capacity, Emitter emitter) noexcept
       : capacity_(capacity), emitter_(std::move(emitter)) {}
 
-    /// Build a fresh @ref clob_t configured with the captured capacity and emitter. The
-    /// emitter is move-consumed so the factory is single-shot by intent. Default @ref clob_memory_t
-    /// is built for the capacity and moved into the book with the emitter.
     [[nodiscard]] book_type create() && {
       return book_type{clob_memory_t{capacity_}, std::move(emitter_)};
     }
@@ -38,8 +30,7 @@ namespace matching {
     Emitter emitter_;
   };
 
-  /// CTAD helper: deduces the @c Emitter from the constructor argument so callers can write
-  /// @c clob_factory{capacity, std::move(my_emitter)}.
+  /// Deduces Emitter from constructor argument.
   template <typename Emitter>
   clob_factory_t(std::size_t, Emitter) -> clob_factory_t<Emitter>;
 

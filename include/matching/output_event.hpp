@@ -6,24 +6,24 @@
 
 namespace matching {
 
-  /// TradeEvent (msgtype 2): a fill between an aggressive and a resting order at the resting price.
+  /// Msgtype 2: trade at resting price.
   struct trade_event_t {
     quantity_t quantity{};
     price_t price{};
   };
 
-  /// OrderFullyFilled (msgtype 3): order removed from the book after a trade.
+  /// Msgtype 3.
   struct order_fully_filled_t {
     order_id_t order_id{};
   };
 
-  /// OrderPartiallyFilled (msgtype 4): order still resting with updated quantity.
+  /// Msgtype 4.
   struct order_partially_filled_t {
     order_id_t order_id{};
     quantity_t remaining_quantity{};
   };
 
-  /// Semantic category for @ref order_error_event_t (encoded as an integer on the wire).
+  /// Serialized as the third field of msgtype 5 lines.
   enum class order_error_kind_t : std::uint8_t {
     duplicate_order_id = 0,
     unknown_order_id = 1,
@@ -33,13 +33,13 @@ namespace matching {
     invalid_cancel_order_id = 5,
   };
 
-  /// Non-fatal input rejection surfaced on the matcher → writer queue for downstream visibility.
+  /// Msgtype 5 row payload.
   struct order_error_event_t {
     order_id_t order_id{};
     order_error_kind_t kind{};
   };
 
-  /// Matcher → writer queue: wire-format output messages plus @ref shutdown_t (never serialised).
+  /// Matcher→writer variant (shutdown_t is control-plane only).
   using output_event_t =
     std::variant<trade_event_t, order_fully_filled_t, order_partially_filled_t, order_error_event_t, shutdown_t>;
 
