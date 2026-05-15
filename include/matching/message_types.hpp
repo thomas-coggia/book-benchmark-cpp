@@ -1,10 +1,19 @@
 #pragma once
 
 #include <cstdint>
+#include <string_view>
 
 namespace matching {
 
-  /// Order side. Values match the wire format encoding (0 = Buy, 1 = Sell).
+  /// Three-letter wire tags (newline-delimited CSV). Input: add/cancel. Output: trade/fills/error.
+  inline constexpr std::string_view wire_add{"ADD"};
+  inline constexpr std::string_view wire_cancel{"CXL"};
+  inline constexpr std::string_view wire_trade{"TRD"};
+  inline constexpr std::string_view wire_fully_filled{"FFL"};
+  inline constexpr std::string_view wire_partially_filled{"PFL"};
+  inline constexpr std::string_view wire_error{"ERR"};
+
+  /// Order side. Wire uses @c BUY and @c SLL on add lines (buy / sell).
   enum class side_t : std::uint8_t {
     buy = 0,
     sell = 1

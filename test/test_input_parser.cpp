@@ -25,7 +25,7 @@ namespace matching {
   TEST(ParserTest, ParsesValidAddOrder) {
     captured_err_t err;
     input_event_t evt{};
-    const auto status = parse_line("0,42,1,7,1234", evt, err.sink());
+    const auto status = parse_line("ADD,42,SLL,7,1234", evt, err.sink());
     ASSERT_EQ(status, parse_status_t::ok);
     ASSERT_TRUE(std::holds_alternative<add_order_event_t>(evt));
     const auto& add = std::get<add_order_event_t>(evt);
@@ -39,7 +39,7 @@ namespace matching {
   TEST(ParserTest, ParsesValidCancelOrder) {
     captured_err_t err;
     input_event_t evt{};
-    const auto status = parse_line("1,42", evt, err.sink());
+    const auto status = parse_line("CXL,42", evt, err.sink());
     ASSERT_EQ(status, parse_status_t::ok);
     ASSERT_TRUE(std::holds_alternative<cancel_order_event_t>(evt));
     EXPECT_EQ(std::get<cancel_order_event_t>(evt).order_id, 42);
@@ -69,61 +69,61 @@ namespace matching {
     EXPECT_NE(captured.find("Unknown message type: NOT_A_RECORD"), std::string::npos);
   }
 
-  TEST(ParserTest, InvalidMsgTypeIntegerReportsError) {
+  TEST(ParserTest, UnknownOpcodeReportsError) {
     captured_err_t err;
     input_event_t evt{};
-    EXPECT_EQ(parse_line("9,1,2,3,4", evt, err.sink()), parse_status_t::error);
-    EXPECT_NE(err.contents().find("Unknown message type: 9"), std::string::npos);
+    EXPECT_EQ(parse_line("ZZZ,1,BUY,2,3,4", evt, err.sink()), parse_status_t::error);
+    EXPECT_NE(err.contents().find("Unknown message type: ZZZ"), std::string::npos);
   }
 
   TEST(ParserTest, MissingFieldsInAddReportError) {
     captured_err_t err;
     input_event_t evt{};
-    EXPECT_EQ(parse_line("0,1,0,5", evt, err.sink()), parse_status_t::error);
+    EXPECT_EQ(parse_line("ADD,1,BUY,5", evt, err.sink()), parse_status_t::error);
     EXPECT_NE(err.contents().find("Ill-formed AddOrderRequest"), std::string::npos);
   }
 
   TEST(ParserTest, NonNumericFieldInAddReportsError) {
     captured_err_t err;
     input_event_t evt{};
-    EXPECT_EQ(parse_line("0,abc,0,5,100", evt, err.sink()), parse_status_t::error);
+    EXPECT_EQ(parse_line("ADD,abc,BUY,5,100", evt, err.sink()), parse_status_t::error);
     EXPECT_NE(err.contents().find("Ill-formed AddOrderRequest"), std::string::npos);
   }
 
-  TEST(ParserTest, OutOfRangeSideReportsError) {
+  TEST(ParserTest, InvalidSideTokenReportsError) {
     captured_err_t err;
     input_event_t evt{};
-    EXPECT_EQ(parse_line("0,1,3,5,100", evt, err.sink()), parse_status_t::error);
-    EXPECT_NE(err.contents().find("Invalid side"), std::string::npos);
+    EXPECT_EQ(parse_line("ADD,1,H,5,100", evt, err.sink()), parse_status_t::error);
+    EXPECT_NE(err.contents().find("Invalid side token"), std::string::npos);
   }
 
   TEST(ParserTest, NonPositiveQuantityReportsError) {
     captured_err_t err;
     input_event_t evt{};
-    EXPECT_EQ(parse_line("0,1,0,0,100", evt, err.sink()), parse_status_t::error);
+    EXPECT_EQ(parse_line("ADD,1,BUY,0,100", evt, err.sink()), parse_status_t::error);
     EXPECT_NE(err.contents().find("Non-positive"), std::string::npos);
   }
 
   TEST(ParserTest, NonPositivePriceReportsError) {
     captured_err_t err;
     input_event_t evt{};
-    EXPECT_EQ(parse_line("0,1,0,1,0", evt, err.sink()), parse_status_t::error);
+    EXPECT_EQ(parse_line("ADD,1,BUY,1,0", evt, err.sink()), parse_status_t::error);
     EXPECT_NE(err.contents().find("Non-positive"), std::string::npos);
   }
 
   TEST(ParserTest, IllFormedCancelReportsError) {
     captured_err_t err;
     input_event_t evt{};
-    EXPECT_EQ(parse_line("1,abc", evt, err.sink()), parse_status_t::error);
+    EXPECT_EQ(parse_line("CXL,abc", evt, err.sink()), parse_status_t::error);
     EXPECT_NE(err.contents().find("Ill-formed CancelOrderRequest"), std::string::npos);
   }
 
   TEST(ParserTest, ParseStreamRoutesEventsAndPreservesOrder) {
     captured_err_t err;
     const std::string in_str =
-      "0,1,0,5,100\n"
+      "ADD,1,BUY,5,100\n"
       "NOT_A_RECORD\n"
-      "1,1\n"
+      "CXL,1\n"
       "# trailing comment\n";
     std::istringstream in{in_str};
 
@@ -142,9 +142,9 @@ namespace matching {
     // Garbage lines; none must crash.
     EXPECT_EQ(parse_line(",,,,,", evt, err.sink()), parse_status_t::error);
     EXPECT_EQ(parse_line("0", evt, err.sink()), parse_status_t::error);
-    EXPECT_EQ(parse_line("0,1", evt, err.sink()), parse_status_t::error);
-    EXPECT_EQ(parse_line("1,", evt, err.sink()), parse_status_t::error);
-    EXPECT_EQ(parse_line("0,1,2,3,4,extra", evt, err.sink()), parse_status_t::error);
+    EXPECT_EQ(parse_line("ADD,1", evt, err.sink()), parse_status_t::error);
+    EXPECT_EQ(parse_line("CXL,", evt, err.sink()), parse_status_t::error);
+    EXPECT_EQ(parse_line("ADD,1,BUY,2,3,extra", evt, err.sink()), parse_status_t::error);
     SUCCEED();
   }
 

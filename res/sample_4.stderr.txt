@@ -1,2 +1,2 @@
 Unknown message type: NOT_A_RECORD
-Ill-formed AddOrderRequest: 0,1,0,5
+Ill-formed AddOrderRequest: ADD,1,BUY,5

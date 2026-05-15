@@ -96,15 +96,18 @@ Benchmark numbers (for example in [`benchmark.txt`](benchmark.txt)) were capture
 
 ## Wire format (message types)
 
-| Msg | Line shape | Meaning |
-|-----|------------|---------|
-| 0 | `0,id,side,qty,price` | Add order |
-| 1 | `1,id` | Cancel |
-| 2 | `2,qty,price` | Trade (output) |
-| 3 | `3,id` | Fully filled (output) |
-| 4 | `4,id,remaining` | Partially filled (output) |
+Three-letter message tags (comma-separated fields; see `matching_engine --help`).
 
-- `side`: **0** = buy, **1** = sell.  
+| Tag | Line shape | Meaning |
+|-----|------------|---------|
+| ADD | `ADD,id,side,qty,price` | Add order |
+| CXL | `CXL,id` | Cancel |
+| TRD | `TRD,qty,price` | Trade (output) |
+| FFL | `FFL,id` | Fully filled (output) |
+| PFL | `PFL,id,remaining` | Partially filled (output) |
+| ERR | `ERR,id,kind` | Error (output); `kind` is numeric |
+
+- Side must be **`BUY`** or **`SLL`** (exact spelling).
 - Blank lines and lines starting with **`#`** are skipped.  
 - Quantities and prices are integers (ticks) in this build.  
 - Example recorded pair: `res/sample_1.input.txt` → `res/sample_1.output.txt`.

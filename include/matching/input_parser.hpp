@@ -57,6 +57,16 @@ namespace matching {
       return value;
     }
 
+    [[nodiscard]] inline std::optional<side_t> parse_side_token(std::string_view sv) noexcept {
+      if (sv == "BUY") {
+        return side_t::buy;
+      }
+      if (sv == "SLL") {
+        return side_t::sell;
+      }
+      return std::nullopt;
+    }
+
   }  // namespace detail
 
   /// Result of attempting to parse a single line.
@@ -74,41 +84,31 @@ namespace matching {
     }
 
     std::string_view cursor = trimmed;
-    const std::string_view msgtype_field = detail::next_field(cursor);
-    const auto msgtype = detail::parse_int<int>(msgtype_field);
+    const std::string_view opcode_field = detail::next_field(cursor);
 
-    if (!msgtype.has_value()) {
-      std::println(err, "Unknown message type: {}", msgtype_field);
-      return parse_status_t::error;
-    }
-
-    if (*msgtype == 0) {
+    if (opcode_field == wire_add) {
       const auto order_id = detail::parse_int<order_id_t>(detail::next_field(cursor));
-      const auto side_raw = detail::parse_int<int>(detail::next_field(cursor));
+      const std::string_view side_token = detail::next_field(cursor);
       const auto quantity = detail::parse_int<quantity_t>(detail::next_field(cursor));
       const auto price = detail::parse_int<price_t>(detail::next_field(cursor));
-      if (!order_id || !side_raw || !quantity || !price || !cursor.empty()) {
+      const auto side = detail::parse_side_token(side_token);
+      if (!order_id || !quantity || !price || !cursor.empty()) {
         std::println(err, "Ill-formed AddOrderRequest: {}", trimmed);
         return parse_status_t::error;
       }
-      if (*side_raw != 0 && *side_raw != 1) {
-        std::println(err, "Invalid side {} in AddOrderRequest: {}", *side_raw, trimmed);
+      if (!side.has_value()) {
+        std::println(err, "Invalid side token '{}' in AddOrderRequest: {}", side_token, trimmed);
         return parse_status_t::error;
       }
       if (*quantity <= 0 || *price <= 0 || *order_id <= 0) {
         std::println(err, "Non-positive field in AddOrderRequest: {}", trimmed);
         return parse_status_t::error;
       }
-      out = add_order_event_t{
-        *order_id,
-        static_cast<side_t>(*side_raw),
-        *quantity,
-        *price,
-      };
+      out = add_order_event_t{*order_id, *side, *quantity, *price};
       return parse_status_t::ok;
     }
 
-    if (*msgtype == 1) {
+    if (opcode_field == wire_cancel) {
       const auto order_id = detail::parse_int<order_id_t>(detail::next_field(cursor));
       if (!order_id || !cursor.empty()) {
         std::println(err, "Ill-formed CancelOrderRequest: {}", trimmed);
@@ -122,7 +122,7 @@ namespace matching {
       return parse_status_t::ok;
     }
 
-    std::println(err, "Unknown message type: {}", msgtype_field);
+    std::println(err, "Unknown message type: {}", opcode_field);
     return parse_status_t::error;
   }
 

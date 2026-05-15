@@ -209,4 +209,4 @@ CPU affinity is optional (CLI pins); benchmark uses the same idea for apples-to-
 
 ## Wire format
 
-Same as [`README.md`](README.md) (**msgtype** table). Integers on the wire; comments and blank lines ignored in input.
+Same as [`README.md`](README.md). Messages use **three-letter tags** (e.g. `ADD`/`CXL` in, `TRD`/`FFL`/`PFL`/`ERR` out); the **side** field on adds is **`BUY`** or **`SLL`**; other numeric fields remain integers; comments and blank lines are skipped on input.
