@@ -36,7 +36,7 @@ namespace matching {
     std::vector<event_record_t> events_;
 
     auto make_book(std::size_t capacity = 1024) {
-      return clob_t<recorder_t>{capacity, recorder_t{&events_}};
+      return clob_t<recorder_t>{clob_memory_t{capacity}, recorder_t{&events_}};
     }
 
     static add_order_request_t buy(order_id_t id, quantity_t qty, price_t px) {

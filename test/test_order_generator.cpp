@@ -36,7 +36,7 @@ namespace matching::benchmark {
     order_generator_t gen{p};
 
     std::size_t trades = 0;
-    clob_t<trade_counter_t> book{1u << 17, trade_counter_t{&trades}};
+    clob_t<trade_counter_t> book{clob_memory_t{1u << 17}, trade_counter_t{&trades}};
 
     std::unordered_set<order_id_t> added_ids;
     std::size_t cancels = 0;

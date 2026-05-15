@@ -18,8 +18,8 @@
 namespace matching {
 
   /// One resting order: single cache-line-friendly record with scalar fields and intrusive
-  /// same-price list pointers. Stable address for the lifetime of the @ref clob_t (monotonic
-  /// arena); pointers in levels and @c lookup_ are never invalidated by growth.
+  /// same-price list pointers. Stable address for the lifetime of the @ref clob_t (resting-order
+  /// @c monotonic_buffer_resource arena); pointers in levels and @c lookup_ are never invalidated by growth.
   struct alignas(64) order_node_t {
     order_id_t order_id{};
     price_t price{};
@@ -37,8 +37,7 @@ namespace matching {
       return ((size + alignment - 1) / alignment) * alignment;
     }
 
-    /// Contiguous backing for resting @ref order_node_t objects via @c monotonic_buffer_resource.
-    [[nodiscard]] constexpr std::size_t order_arena_byte_count(std::size_t max_orders) noexcept {
+    [[nodiscard]] constexpr std::size_t resting_order_arena_byte_count(std::size_t max_orders) noexcept {
       if (max_orders == 0) {
         return 0;
       }
@@ -47,11 +46,10 @@ namespace matching {
       return align_up(max_orders * per, 4096);
     }
 
-    /// Single contiguous backing block for the two @c pmr::map price ladders in @ref clob_t.
-    /// Map nodes are taken from an @c unsynchronized_pool_resource seeded from this buffer; if the
-    /// book grows past the estimate, the monotonic buffer's upstream (@c new_delete_resource)
-    /// satisfies overflow. Capped so huge @p capacity hints do not reserve hundreds of MiB.
-    [[nodiscard]] constexpr std::size_t clob_arena_byte_count(std::size_t capacity) noexcept {
+    /// Single contiguous backing block whose initial space seeds @c ladder_lookup_pool: @c pmr::map
+    /// nodes for bid/ask price ladders and @c pmr::unordered_map nodes for order-id lookup both draw
+    /// from that pool. Overflow uses the monotonic buffer's upstream (@c new_delete_resource).
+    [[nodiscard]] constexpr std::size_t ladder_lookup_arena_byte_count(std::size_t capacity) noexcept {
       constexpr std::size_t per_level = 96;
       constexpr std::size_t ceiling = 32 * 1024 * 1024;
       constexpr std::size_t floor = 262144;
@@ -62,6 +60,10 @@ namespace matching {
 
   }  // namespace detail
 
+  /// Polymorphic allocator for the order-id lookup table (same @c ladder_lookup_pool as price ladders).
+  using ladder_lookup_allocator_t =
+    std::pmr::polymorphic_allocator<std::pair<const order_id_t, order_node_t*>>;
+
   /// Intrusive FIFO chain head/tail for orders at one price (the @c std::map key on the side).
   struct price_level_t {
     order_node_t* head{nullptr};
@@ -69,13 +71,16 @@ namespace matching {
   };
 
   /// One side of the book (bids or asks). Levels live in a @c std::pmr::map keyed by price (asks:
-  /// best is @c begin, bids: best is @c rbegin), allocating from the shared pool supplied at
-  /// construction. Resting orders are @ref order_node_t records linked intrusively per level.
+  /// best is @c begin, bids: best is @c rbegin), using the supplied @c level_allocator_type
+  /// (typically from @ref clob_memory_t::ladder_allocator).
+  /// Resting orders are @ref order_node_t records linked intrusively per level.
   class order_book_side_t {
   public:
-    explicit order_book_side_t(side_t side, std::pmr::memory_resource* pool)
+    using level_allocator_type = std::pmr::polymorphic_allocator<std::pair<const price_t, price_level_t>>;
+
+    explicit order_book_side_t(side_t side, level_allocator_type alloc)
       : side_(side),
-        levels_(pool) {}
+        levels_(alloc) {}
 
     /// True if the resting order at @p resting_price would cross an aggressive order on this
     /// side priced at @p aggressive_price.  For a buy aggressive on the ask side, we cross when
@@ -175,15 +180,70 @@ namespace matching {
     std::pmr::map<price_t, price_level_t> levels_;
   };
 
+  /// Owns PMR backing for one @ref clob_t and exposes the polymorphic allocators / resources used by
+  /// the book. Typically constructed in @ref clob_factory_t (or tests) and moved into @c clob_t.
+  ///
+  /// Non-relocatable PMR objects live in a private heap block so @c clob_t can be moved while
+  /// @c ladder_lookup_pool and @c resting_order_mono keep stable addresses.
+  class clob_memory_t {
+    struct impl {
+      std::size_t book_capacity;
+      std::vector<std::byte> ladder_lookup_arena;
+      std::pmr::monotonic_buffer_resource ladder_lookup_mono;
+      std::pmr::unsynchronized_pool_resource ladder_lookup_pool;
+      std::vector<std::byte> resting_order_arena;
+      std::pmr::monotonic_buffer_resource resting_order_mono;
+
+      explicit impl(std::size_t capacity)
+        : book_capacity(capacity),
+          ladder_lookup_arena(detail::ladder_lookup_arena_byte_count(capacity)),
+          ladder_lookup_mono(
+            ladder_lookup_arena.data(), ladder_lookup_arena.size(), std::pmr::new_delete_resource()),
+          ladder_lookup_pool(&ladder_lookup_mono),
+          resting_order_arena(detail::resting_order_arena_byte_count(capacity)),
+          resting_order_mono(
+            resting_order_arena.data(), resting_order_arena.size(), std::pmr::new_delete_resource()) {}
+    };
+
+  public:
+    explicit clob_memory_t(std::size_t book_capacity) : storage_(std::make_unique<impl>(book_capacity)) {}
+
+    /// Capacity hint this object was built with (arena sizing); used e.g. for @c lookup_ reserve.
+    [[nodiscard]] std::size_t book_capacity() const noexcept {
+      return storage_->book_capacity;
+    }
+
+    [[nodiscard]] order_book_side_t::level_allocator_type ladder_allocator() const noexcept {
+      return order_book_side_t::level_allocator_type{&storage_->ladder_lookup_pool};
+    }
+
+    [[nodiscard]] ladder_lookup_allocator_t lookup_allocator() const noexcept {
+      return ladder_lookup_allocator_t{&storage_->ladder_lookup_pool};
+    }
+
+    /// Monotonic resource for resting @ref order_node_t allocations (separate arena from ladder/lookup pool).
+    [[nodiscard]] std::pmr::memory_resource* resting_order_resource() noexcept {
+      return &storage_->resting_order_mono;
+    }
+
+    clob_memory_t(const clob_memory_t&) = delete;
+    clob_memory_t& operator=(const clob_memory_t&) = delete;
+    clob_memory_t(clob_memory_t&&) noexcept = default;
+    clob_memory_t& operator=(clob_memory_t&&) noexcept = default;
+
+  private:
+    std::unique_ptr<impl> storage_;
+  };
+
   /// The single-symbol Central Limit Order Book.
   ///
-  /// **Allocation model** (bounded by the constructor @p capacity): each resting order is an
-  /// @ref order_node_t allocated from a dedicated @c std::pmr::monotonic_buffer_resource on
-  /// @c order_arena_byte_count(capacity) bytes (overflow to @c new_delete_resource). Pointers to
-  /// nodes stay valid for the life of the book; resting slots are not reused after retire.
-  /// Bid/ask price ladders use @c std::pmr::map backed by one
-  /// contiguous @c std::vector<std::byte> arena feeding an @c unsynchronized_pool_resource. Order-id
-  /// lookup is a reserved @c std::unordered_map.
+  /// **Allocation model** (bounded by @ref clob_memory_t sizing): @ref order_node_t objects are
+  /// allocated from @c resting_order_mono over @c resting_order_arena (@c detail::resting_order_arena_byte_count).
+  /// Bid/ask price ladders use @c std::pmr::map backed by @c ladder_lookup_pool (seeded from
+  /// @c ladder_lookup_mono / @c ladder_lookup_arena; @c detail::ladder_lookup_arena_byte_count). Order-id
+  /// lookup is a @c std::pmr::unordered_map sharing that same pool. Resting slots are not reused after retire.
+  /// @ref clob_memory_t exposes polymorphic allocators and @c resting_order_resource; it is usually built
+  /// by @ref clob_factory_t.
   ///
   /// Templated on @c Emitter so the same matching path serves both the production binary
   /// (where @c Emitter writes formatted lines to @c std::cout) and tests (where @c Emitter
@@ -199,24 +259,20 @@ namespace matching {
   template <typename Emitter>
   class clob_t {
   public:
-    explicit clob_t(std::size_t capacity, Emitter emitter)
-      : arena_(detail::clob_arena_byte_count(capacity)),
-        mono_(arena_.data(), arena_.size(), std::pmr::new_delete_resource()),
-        pool_(&mono_),
-        order_arena_(detail::order_arena_byte_count(capacity)),
-        order_mono_(order_arena_.data(), order_arena_.size(), std::pmr::new_delete_resource()),
-        max_orders_(capacity),
-        bids_(side_t::buy, &pool_),
-        asks_(side_t::sell, &pool_),
-        lookup_(),
+    /// @p memory holds PMR arenas and allocators (typically from @ref clob_factory_t).
+    explicit clob_t(clob_memory_t memory, Emitter emitter)
+      : memory_(std::move(memory)),
+        bids_(side_t::buy, memory_.ladder_allocator()),
+        asks_(side_t::sell, memory_.ladder_allocator()),
+        lookup_(memory_.lookup_allocator()),
         emitter_(std::move(emitter)) {
-      lookup_.reserve(std::max<std::size_t>(capacity * 2, 16));
+      lookup_.reserve(std::max<std::size_t>(memory_.book_capacity() * 2, 16));
     }
 
     clob_t(const clob_t&) = delete;
     clob_t& operator=(const clob_t&) = delete;
-    clob_t(clob_t&&) = delete;
-    clob_t& operator=(clob_t&&) = delete;
+    clob_t(clob_t&&) noexcept = default;
+    clob_t& operator=(clob_t&&) noexcept = default;
 
     /// Process a parsed input event. The @c std::visit cost compiles down to a single
     /// branch on the variant index for our alternatives.
@@ -240,7 +296,7 @@ namespace matching {
       }
     }
 
-    /// CancelOrderRequest path: reserved @c std::unordered_map for ids; pooled @c pmr::map for prices.
+    /// CancelOrderRequest path: @c std::pmr::unordered_map for ids; @c pmr::map for prices.
     void operator()(const cancel_order_request_t& event) {
       const auto it = lookup_.find(event.order_id);
       if (it == lookup_.end() || !it->second->active) {
@@ -275,13 +331,10 @@ namespace matching {
     }
 
   private:
-    [[nodiscard]] bool has_resting_capacity() const noexcept {
-      return resting_alloc_count_ < max_orders_;
-    }
-
-    /// Allocates and value-initializes a node; bumps @ref resting_alloc_count_. Throws on OOM.
+    /// Allocates and value-initializes a node from @c memory_.resting_order_resource(). Throws on OOM.
     [[nodiscard]] order_node_t* allocate_resting_node(order_id_t id, side_t side, price_t price, quantity_t qty) {
-      void* const raw = order_mono_.allocate(sizeof(order_node_t), alignof(order_node_t));
+      void* const raw =
+        memory_.resting_order_resource()->allocate(sizeof(order_node_t), alignof(order_node_t));
       order_node_t* const node = static_cast<order_node_t*>(raw);
       std::construct_at(node);
       node->order_id = id;
@@ -291,7 +344,6 @@ namespace matching {
       node->active = true;
       node->prev_same_price = nullptr;
       node->next_same_price = nullptr;
-      ++resting_alloc_count_;
       return node;
     }
 
@@ -384,11 +436,6 @@ namespace matching {
     }
 
     void rest_order(const add_order_request_t& residual) {
-      if (!has_resting_capacity()) {
-        // We are out of resting-order slots (constructor capacity). Drop silently rather than
-        // crash; in production this would be surfaced via a dedicated diagnostic / backpressure.
-        return;
-      }
       order_node_t* const node =
         allocate_resting_node(residual.order_id, residual.side, residual.price, residual.quantity);
       if (!lookup_.try_emplace(residual.order_id, node).second) {
@@ -400,16 +447,10 @@ namespace matching {
       side_book.append(node);
     }
 
-    std::vector<std::byte> arena_;
-    std::pmr::monotonic_buffer_resource mono_;
-    std::pmr::unsynchronized_pool_resource pool_;
-    std::vector<std::byte> order_arena_;
-    std::pmr::monotonic_buffer_resource order_mono_;
-    std::size_t max_orders_{0};
-    std::size_t resting_alloc_count_{0};
+    clob_memory_t memory_;
     order_book_side_t bids_;
     order_book_side_t asks_;
-    std::unordered_map<order_id_t, order_node_t*> lookup_;
+    std::pmr::unordered_map<order_id_t, order_node_t*> lookup_;
     Emitter emitter_;
   };
 

@@ -64,7 +64,7 @@ namespace matching {
       1024,
       queue_emitter_t<queue_capacity_v>{output_queue, token},
     };
-    auto book = std::move(factory).create_heap();
+    auto book = std::move(factory).create();
 
     reader_loop_t<queue_capacity_v> reader_loop{in, err, order_queue, token};
     runtime::agent_t reader_agent{std::move(reader_loop), std::nullopt};
@@ -115,7 +115,7 @@ namespace matching {
       1024,
       queue_emitter_t<queue_capacity_v>{output_queue, token},
     };
-    auto book = std::move(factory).create_heap();
+    auto book = std::move(factory).create();
 
     using matcher_loop_t =
       runtime::event_loop_t<runtime::queue_source_shared_t<order_queue_t>, matcher_handler_t<queue_capacity_v>>;

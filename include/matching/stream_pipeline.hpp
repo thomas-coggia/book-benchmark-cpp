@@ -100,7 +100,7 @@ namespace matching {
     using output_queue_type = runtime::spsc_queue_t<output_event_t, Capacity>;
 
     matcher_handler_t(
-      std::unique_ptr<book_type> book,
+      book_type book,
       std::shared_ptr<output_queue_type> out,
       std::stop_token token
     ) noexcept
@@ -111,7 +111,7 @@ namespace matching {
         forward_shutdown();
         return true;
       }
-      (*book_)(event);
+      book_(event);
       return false;
     }
 
@@ -123,7 +123,7 @@ namespace matching {
       }
     }
 
-    std::unique_ptr<book_type> book_;
+    book_type book_;
     std::shared_ptr<output_queue_type> out_;
     std::stop_token token_;
   };

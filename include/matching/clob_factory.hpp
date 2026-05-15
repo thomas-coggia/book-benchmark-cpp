@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstddef>
-#include <memory>
 #include <utility>
 
 #include "matching/order_book.hpp"
@@ -12,8 +11,8 @@ namespace matching {
   /// Shared by the `matching_engine` and `benchmark` binaries so both use the same construction
   /// path; the only template parameter is the static @c Emitter type.
   ///
-  /// @c create() is a one-shot prvalue producer; mandatory copy elision (C++17) lets us
-  /// hand back a non-movable @ref clob_t directly.
+  /// @c create() is a one-shot prvalue producer; mandatory copy elision (C++17) can construct
+  /// the @ref clob_t handle without extra moves of the heavy implementation object.
   template <typename Emitter>
   class clob_factory_t {
   public:
@@ -24,15 +23,10 @@ namespace matching {
       : capacity_(capacity), emitter_(std::move(emitter)) {}
 
     /// Build a fresh @ref clob_t configured with the captured capacity and emitter. The
-    /// emitter is move-consumed so the factory is single-shot by intent.
+    /// emitter is move-consumed so the factory is single-shot by intent. Default @ref clob_memory_t
+    /// is built for the capacity and moved into the book with the emitter.
     [[nodiscard]] book_type create() && {
-      return book_type{capacity_, std::move(emitter_)};
-    }
-
-    /// Same as @ref create but returns heap ownership. Use when the @ref clob_t must live in a
-    /// movable handle (the book type is immovable).
-    [[nodiscard]] std::unique_ptr<book_type> create_heap() && {
-      return std::make_unique<book_type>(capacity_, std::move(emitter_));
+      return book_type{clob_memory_t{capacity_}, std::move(emitter_)};
     }
 
     [[nodiscard]] std::size_t capacity() const noexcept {

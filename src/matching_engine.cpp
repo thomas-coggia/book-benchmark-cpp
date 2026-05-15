@@ -39,7 +39,7 @@ int main(int argc, char** argv) {
       config.capacity,
       queue_emitter_t<queue_capacity_v>{output_queue, token},
     };
-    auto book = std::move(factory).create_heap();
+    auto book = std::move(factory).create();
 
     reader_loop_t<queue_capacity_v> reader_loop{std::cin, std::cerr, order_queue, token};
     agent_t reader_agent{std::move(reader_loop), config.reader_cpu};

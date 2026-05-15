@@ -1,4 +1,4 @@
-matching::benchmark — 5 preset(s), iterations = 5, warmup = 1000, latency = on
+matching::benchmark — 5 preset(s), iterations = 10, warmup = 1000, latency = on
   pinning: producer=2 matcher=4 stats=6
 ============================================================
 Preset: quiet
@@ -19,18 +19,18 @@ Resolved profile:
   qty_min/qty_max   = 1 / 1000
 ------------------------------------------------------------
 Throughput:
-  orders            = 5000000
-  trades            = 4005002
-  total elapsed     = 1063.734 ms
-  orders / sec      = 4700424.40
-  trades / sec      = 3765041.83
+  orders            = 10000000
+  trades            = 7968510
+  total elapsed     = 2104.295 ms
+  orders / sec      = 4752184.52
+  trades / sec      = 3786782.98
 Latency (ns):
-  samples           = 5000000
-  mean              = 142.6
-  stddev            = 427.6
-  p10 / p50         = 48.4 / 110.3
-  p95 / p99 / p99.9 = 326.8 / 661.4 / 1518.5
-  min / max         = 19.6 / 204755.6
+  samples           = 10000000
+  mean              = 142.8
+  stddev            = 422.4
+  p10 / p50         = 48.0 / 110.0
+  p95 / p99 / p99.9 = 338.1 / 674.8 / 1302.3
+  min / max         = 19.6 / 257279.4
 
 ============================================================
 Preset: active
@@ -51,18 +51,18 @@ Resolved profile:
   qty_min/qty_max   = 1 / 1000
 ------------------------------------------------------------
 Throughput:
-  orders            = 5000000
-  trades            = 3664733
-  total elapsed     = 1036.726 ms
-  orders / sec      = 4822876.57
-  trades / sec      = 3534910.98
+  orders            = 10000000
+  trades            = 7315922
+  total elapsed     = 2405.359 ms
+  orders / sec      = 4157383.50
+  trades / sec      = 3041509.34
 Latency (ns):
-  samples           = 5000000
-  mean              = 144.4
-  stddev            = 323.8
-  p10 / p50         = 40.9 / 115.0
-  p95 / p99 / p99.9 = 330.3 / 639.6 / 1208.4
-  min / max         = 18.9 / 144139.6
+  samples           = 10000000
+  mean              = 174.2
+  stddev            = 7577.7
+  p10 / p50         = 43.1 / 122.1
+  p95 / p99 / p99.9 = 400.8 / 785.5 / 1646.5
+  min / max         = 18.9 / 12766894.4
 
 ============================================================
 Preset: cancel
@@ -83,18 +83,18 @@ Resolved profile:
   qty_min/qty_max   = 1 / 500
 ------------------------------------------------------------
 Throughput:
-  orders            = 5000000
-  trades            = 260481
-  total elapsed     = 911.739 ms
-  orders / sec      = 5484028.40
-  trades / sec      = 285697.04
+  orders            = 10000000
+  trades            = 515076
+  total elapsed     = 1829.445 ms
+  orders / sec      = 5466139.92
+  trades / sec      = 281547.75
 Latency (ns):
-  samples           = 5000000
-  mean              = 116.1
-  stddev            = 295.7
-  p10 / p50         = 68.7 / 103.6
-  p95 / p99 / p99.9 = 196.5 / 279.8 / 471.3
-  min / max         = 13.9 / 139331.4
+  samples           = 10000000
+  mean              = 115.5
+  stddev            = 401.9
+  p10 / p50         = 68.3 / 103.2
+  p95 / p99 / p99.9 = 191.8 / 272.3 / 462.0
+  min / max         = 13.9 / 683285.7
 
 ============================================================
 Preset: volatile
@@ -115,18 +115,18 @@ Resolved profile:
   qty_min/qty_max   = 1 / 1000
 ------------------------------------------------------------
 Throughput:
-  orders            = 5000000
-  trades            = 3888885
-  total elapsed     = 1233.279 ms
-  orders / sec      = 4054232.74
-  trades / sec      = 3153288.98
+  orders            = 10000000
+  trades            = 7780133
+  total elapsed     = 2641.354 ms
+  orders / sec      = 3785936.41
+  trades / sec      = 2945508.88
 Latency (ns):
-  samples           = 5000000
-  mean              = 182.7
-  stddev            = 2647.3
-  p10 / p50         = 41.6 / 143.4
-  p95 / p99 / p99.9 = 410.1 / 792.0 / 1759.1
-  min / max         = 18.2 / 5823451.4
+  samples           = 10000000
+  mean              = 198.8
+  stddev            = 661.9
+  p10 / p50         = 42.4 / 154.5
+  p95 / p99 / p99.9 = 467.3 / 906.2 / 1970.7
+  min / max         = 18.2 / 547568.6
 
 ============================================================
 Preset: sweep
@@ -147,16 +147,16 @@ Resolved profile:
   qty_min/qty_max   = 1 / 10000
 ------------------------------------------------------------
 Throughput:
-  orders            = 5000000
-  trades            = 4268980
-  total elapsed     = 1085.053 ms
-  orders / sec      = 4608070.85
-  trades / sec      = 3934352.46
+  orders            = 10000000
+  trades            = 8538651
+  total elapsed     = 2151.166 ms
+  orders / sec      = 4648642.13
+  trades / sec      = 3969313.27
 Latency (ns):
-  samples           = 5000000
-  mean              = 154.1
-  stddev            = 398.2
-  p10 / p50         = 38.1 / 123.5
-  p95 / p99 / p99.9 = 352.0 / 696.9 / 1548.7
-  min / max         = 18.9 / 195199.4
+  samples           = 10000000
+  mean              = 151.6
+  stddev            = 383.2
+  p10 / p50         = 37.4 / 122.1
+  p95 / p99 / p99.9 = 349.2 / 689.8 / 1450.4
+  min / max         = 18.2 / 283375.8
 
