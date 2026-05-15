@@ -37,6 +37,8 @@ namespace matching {
       void operator()(const order_partially_filled_t& e) const {
         fills->emplace_back(e);
       }
+
+      void operator()(const order_error_event_t&) const {}
     };
 
   }  // namespace

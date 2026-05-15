@@ -32,6 +32,11 @@ namespace matching {
       std::println(*out_, "4,{},{}", event.order_id, event.remaining_quantity);
     }
 
+    /// OrderError → @c "5,<orderid>,<kind>" (@p kind is @ref order_error_kind_t as integer).
+    void operator()(const order_error_event_t& event) const {
+      std::println(*out_, "5,{},{}", event.order_id, static_cast<unsigned>(event.kind));
+    }
+
     [[nodiscard]] std::ostream& sink() const noexcept {
       return *out_;
     }

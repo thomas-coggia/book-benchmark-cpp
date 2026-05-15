@@ -49,6 +49,8 @@ namespace matching::benchmark {
     void operator()(const order_fully_filled_t&) const noexcept {}
 
     void operator()(const order_partially_filled_t&) const noexcept {}
+
+    void operator()(const order_error_event_t&) const noexcept {}
   };
 
   /// One latency sample shipped from the matcher to the stats agent: elapsed time for one

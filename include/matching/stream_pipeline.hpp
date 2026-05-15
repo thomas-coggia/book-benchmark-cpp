@@ -43,6 +43,10 @@ namespace matching {
       push(output_event_t{event});
     }
 
+    void operator()(const order_error_event_t& event) noexcept {
+      push(output_event_t{event});
+    }
+
   private:
     void push(const output_event_t& event) noexcept {
       while (!token_.stop_requested() && !queue_->try_push(event)) {

@@ -243,7 +243,8 @@ namespace matching {
   /// Templated on @c Emitter so the same matching path serves both the production binary
   /// (where @c Emitter writes formatted lines to @c std::cout) and tests (where @c Emitter
   /// collects events into vectors). The emitter must provide @c operator() for
-  /// @ref trade_event_t, @ref order_fully_filled_t, and @ref order_partially_filled_t.
+  /// @ref trade_event_t, @ref order_fully_filled_t, @ref order_partially_filled_t, and
+  /// @ref order_error_event_t.
   ///
   /// **Match-loop output ordering:** for every fill we emit
   ///   1. @ref trade_event_t — the trade itself,
@@ -295,7 +296,7 @@ namespace matching {
     void operator()(const cancel_order_event_t& event) {
       const auto it = lookup_.find(event.order_id);
       if (it == lookup_.end() || !it->second->active) {
-        // Cancel of an unknown / already-filled / already-cancelled id: no-op (no crash, no output).
+        emitter_(order_error_event_t{event.order_id, order_error_kind_t::unknown_order_id});
         return;
       }
       order_node_t* node = it->second;
@@ -437,6 +438,7 @@ namespace matching {
         allocate_resting_node(residual.order_id, residual.side, residual.price, residual.quantity);
       if (!lookup_.try_emplace(residual.order_id, node).second) {
         // Duplicate id. Roll back the node we just claimed so a conflicting event does not corrupt the book.
+        emitter_(order_error_event_t{residual.order_id, order_error_kind_t::duplicate_order_id});
         node->active = false;
         return;
       }

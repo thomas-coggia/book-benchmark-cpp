@@ -10,7 +10,8 @@
 
 namespace matching {
 
-  using output_payload_t = std::variant<trade_event_t, order_fully_filled_t, order_partially_filled_t>;
+  using output_payload_t =
+    std::variant<trade_event_t, order_fully_filled_t, order_partially_filled_t, order_error_event_t>;
 
   // Collector emitter: stores every output event in arrival order so tests can assert both
   // contents and ordering.
@@ -30,6 +31,10 @@ namespace matching {
     }
 
     void operator()(const order_partially_filled_t& e) const {
+      events->push_back({e});
+    }
+
+    void operator()(const order_error_event_t& e) const {
       events->push_back({e});
     }
   };
@@ -59,6 +64,10 @@ namespace matching {
 
     static const order_partially_filled_t* as_partial(const event_record_t& r) {
       return std::get_if<order_partially_filled_t>(&r.payload);
+    }
+
+    static const order_error_event_t* as_error(const event_record_t& r) {
+      return std::get_if<order_error_event_t>(&r.payload);
     }
 
     [[nodiscard]] static order_id_t fill_order_id(const event_record_t& r) {
@@ -193,13 +202,19 @@ namespace matching {
     EXPECT_EQ(book.ask_depth(), 1u);
   }
 
-  TEST_F(OrderBookTest, CancelOfUnknownIdIsNoop) {
+  TEST_F(OrderBookTest, CancelOfUnknownIdEmitsErrors) {
     auto book = make_book();
     book(cancel_order_event_t{42});
     book(buy(1, 5, 100));
     book(cancel_order_event_t{99});
 
-    EXPECT_TRUE(events_.empty());
+    ASSERT_EQ(events_.size(), 2u);
+    ASSERT_NE(as_error(events_[0]), nullptr);
+    EXPECT_EQ(as_error(events_[0])->order_id, 42);
+    EXPECT_EQ(as_error(events_[0])->kind, order_error_kind_t::unknown_order_id);
+    ASSERT_NE(as_error(events_[1]), nullptr);
+    EXPECT_EQ(as_error(events_[1])->order_id, 99);
+    EXPECT_EQ(as_error(events_[1])->kind, order_error_kind_t::unknown_order_id);
     EXPECT_EQ(book.bid_depth(), 1u);
   }
 
@@ -289,13 +304,27 @@ namespace matching {
     EXPECT_EQ(as_partial(events_[5])->remaining_quantity, 2);
   }
 
-  TEST_F(OrderBookTest, CancelAfterFullFillIsNoop) {
+  TEST_F(OrderBookTest, CancelAfterFullFillEmitsUnknownIdError) {
     auto book = make_book();
     book(buy(1, 5, 100));
     book(sell(2, 5, 100));  // 1 is fully filled.
     events_.clear();
-    book(cancel_order_event_t{1});  // Should be silently ignored.
-    EXPECT_TRUE(events_.empty());
+    book(cancel_order_event_t{1});
+    ASSERT_EQ(events_.size(), 1u);
+    ASSERT_NE(as_error(events_[0]), nullptr);
+    EXPECT_EQ(as_error(events_[0])->order_id, 1);
+    EXPECT_EQ(as_error(events_[0])->kind, order_error_kind_t::unknown_order_id);
+  }
+
+  TEST_F(OrderBookTest, DuplicateRestingOrderIdEmitsError) {
+    auto book = make_book();
+    book(buy(1, 5, 100));
+    book(buy(1, 3, 99));
+    ASSERT_EQ(events_.size(), 1u);
+    ASSERT_NE(as_error(events_[0]), nullptr);
+    EXPECT_EQ(as_error(events_[0])->order_id, 1);
+    EXPECT_EQ(as_error(events_[0])->kind, order_error_kind_t::duplicate_order_id);
+    EXPECT_EQ(book.bid_depth(), 1u);
   }
 
   TEST_F(OrderBookTest, ZeroQuantityAddIsNoop) {

@@ -25,6 +25,8 @@ namespace matching::benchmark {
     void operator()(const order_fully_filled_t&) const noexcept {}
 
     void operator()(const order_partially_filled_t&) const noexcept {}
+
+    void operator()(const order_error_event_t&) const noexcept {}
   };
 
   struct GeneratorSanityTest : ::testing::TestWithParam<market_profile_t> {};

@@ -23,7 +23,20 @@ namespace matching {
     quantity_t remaining_quantity{};
   };
 
+  /// Semantic category for @ref order_error_event_t (encoded as an integer on the wire).
+  enum class order_error_kind_t : std::uint8_t {
+    duplicate_order_id = 0,
+    unknown_order_id = 1,
+  };
+
+  /// Non-fatal input rejection surfaced on the matcher → writer queue for downstream visibility.
+  struct order_error_event_t {
+    order_id_t order_id{};
+    order_error_kind_t kind{};
+  };
+
   /// Matcher → writer queue: wire-format output messages plus @ref shutdown_t (never serialised).
-  using output_event_t = std::variant<trade_event_t, order_fully_filled_t, order_partially_filled_t, shutdown_t>;
+  using output_event_t =
+    std::variant<trade_event_t, order_fully_filled_t, order_partially_filled_t, order_error_event_t, shutdown_t>;
 
 }  // namespace matching
