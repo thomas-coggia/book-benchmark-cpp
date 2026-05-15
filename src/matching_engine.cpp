@@ -1,12 +1,11 @@
 #include <cstddef>
-#include <cxxopts.hpp>
 #include <iostream>
-#include <optional>
 #include <print>
 #include <stop_token>
 #include <type_traits>
 #include <utility>
 #include <variant>
+
 #include "matching/clob_factory.hpp"
 #include "matching/input_parser.hpp"
 #include "matching/output_formatter.hpp"
@@ -15,15 +14,12 @@
 #include "matching/runtime/event_loop.hpp"
 #include "matching/runtime/signal_handler.hpp"
 #include "matching/runtime/spsc_queue.hpp"
+#include "app/matching_engine_config.hpp"
 
 namespace {
 
   using namespace matching;
   using namespace matching::runtime;
-
-  /// Default max resting-order allocations for the matching engine (~2M), comfortably covering the
-  /// bundled sample workload and benchmark presets.
-  constexpr std::size_t default_capacity_v = 2'000'000;
 
   /// Default SPSC ring depth. 65,536 is enough that a single context switch on the writer
   /// agent does not stall the matcher; both queues use the same value for symmetry.
@@ -148,124 +144,52 @@ namespace {
     output_formatter_t* formatter_{nullptr};
   };
 
-  void print_help() {
-    std::println(
-      std::cout,
-      "matching_engine — single-symbol limit-order matching engine\n"
-      "\n"
-      "Reads CSV-encoded request lines from stdin, drives the order book through an\n"
-      "event-driven runtime (reader → matcher → writer agents joined by SPSC queues),\n"
-      "writes trade and fill events to stdout, and reports malformed input lines on stderr.\n"
-      "\n"
-      "Input grammar (one message per line):\n"
-      "  0,<orderid>,<side>,<quantity>,<price>     AddOrderRequest    (side: 0=Buy, 1=Sell)\n"
-      "  1,<orderid>                               CancelOrderRequest\n"
-      "\n"
-      "Output grammar:\n"
-      "  2,<quantity>,<price>                       TradeEvent\n"
-      "  3,<orderid>                                OrderFullyFilled\n"
-      "  4,<orderid>,<remaining-quantity>           OrderPartiallyFilled\n"
-      "\n"
-      "Flags:\n"
-      "  --capacity <N>     Maximum number of resting orders the book can allocate (default: {}).\n"
-      "  --reader-cpu <N>   Pin the stdin reader agent to CPU N.\n"
-      "  --matcher-cpu <N>  Pin the matcher agent to CPU N.\n"
-      "  --writer-cpu <N>   Pin the output writer agent to CPU N.\n"
-      "  --help, -h         Print this message and exit.\n",
-      default_capacity_v
-    );
-  }
-
 }  // namespace
 
 int main(int argc, char** argv) {
-  cxxopts::Options options(argv != nullptr && argv[0] != nullptr ? argv[0] : "matching_engine", "");
-  options.add_options()
-    ("h,help", "Print detailed help and exit")
-    ("capacity", "Maximum number of resting orders the book can allocate", cxxopts::value<std::size_t>())
-    ("reader-cpu", "Pin the stdin reader agent to CPU N", cxxopts::value<int>())
-    ("matcher-cpu", "Pin the matcher agent to CPU N", cxxopts::value<int>())
-    ("writer-cpu", "Pin the output writer agent to CPU N", cxxopts::value<int>());
-
-  cxxopts::ParseResult parsed;
   try {
-    parsed = options.parse(argc, argv);
-  } catch (const cxxopts::exceptions::exception& ex) {
-    std::println(std::cerr, "matching_engine: {}", ex.what());
+    const auto config = matching_engine_config::parse_config(argc, argv);
+
+    order_queue_t order_queue;
+    output_queue_t output_queue;
+
+    install_signal_handler();
+    std::stop_source& source = global_stop_source();
+    std::stop_token token = source.get_token();
+
+    output_formatter_t formatter{std::cout};
+    clob_factory_t<queue_emitter_t> factory{config.capacity, queue_emitter_t{output_queue, token}};
+    book_t book = std::move(factory).create();
+
+    reader_loop_t reader_loop{std::cin, std::cerr, order_queue, token};
+    agent_t reader_agent{std::move(reader_loop), config.reader_cpu};
+
+    using matcher_loop_t = event_loop_t<queue_source_t<order_queue_t>, matcher_handler_t>;
+    matcher_loop_t matcher_loop{
+      queue_source_t<order_queue_t>{order_queue},
+      matcher_handler_t{book, output_queue, token},
+      token,
+    };
+    agent_t matcher_agent{std::move(matcher_loop), config.matcher_cpu};
+
+    using writer_loop_t = event_loop_t<queue_source_t<output_queue_t>, writer_handler_t>;
+    writer_loop_t writer_loop{
+      queue_source_t<output_queue_t>{output_queue},
+      writer_handler_t{formatter},
+      token,
+    };
+    agent_t writer_agent{std::move(writer_loop), config.writer_cpu};
+
+    agent_system_t system{source, std::move(reader_agent), std::move(matcher_agent), std::move(writer_agent)};
+    system.start();
+    system.join();
+
+    uninstall_signal_handler();
+  } catch (const matching_engine_config::help_requested&) {
+    return 0;
+  } catch (const matching_engine_config::parse_error&) {
     return 1;
   }
 
-  if (parsed.count("help") != 0) {
-    print_help();
-    return 0;
-  }
-
-  std::size_t capacity = default_capacity_v;
-  if (parsed.count("capacity") != 0) {
-    capacity = parsed["capacity"].as<std::size_t>();
-    if (capacity == 0) {
-      std::println(std::cerr, "matching_engine: invalid --capacity value '0'");
-      return 1;
-    }
-  }
-
-  std::optional<int> reader_cpu;
-  std::optional<int> matcher_cpu;
-  std::optional<int> writer_cpu;
-  for (const auto& [flag, holder] : std::initializer_list<std::pair<const char*, std::optional<int>*>>{
-         {"reader-cpu", &reader_cpu},
-         {"matcher-cpu", &matcher_cpu},
-         {"writer-cpu", &writer_cpu},
-       }) {
-    if (parsed.count(flag) != 0) {
-      const int value = parsed[flag].as<int>();
-      if (value < 0) {
-        std::println(std::cerr, "matching_engine: invalid --{} value '{}'", flag, value);
-        return 1;
-      }
-      *holder = value;
-    }
-  }
-
-  // Wire the data plane: two SPSC queues forming a linear three-stage pipeline.
-  order_queue_t order_queue;
-  output_queue_t output_queue;
-
-  // Install signal handler before any agent starts; SIGINT/SIGTERM flip the global stop
-  // source, which is the same one held by the agent system below.
-  install_signal_handler();
-  std::stop_source& source = global_stop_source();
-  std::stop_token token = source.get_token();
-
-  // Build the book up front. The emitter forwards trades/fills onto the writer queue.
-  output_formatter_t formatter{std::cout};
-  clob_factory_t<queue_emitter_t> factory{capacity, queue_emitter_t{output_queue, token}};
-  book_t book = std::move(factory).create();
-
-  // Compose loops + agents.
-  reader_loop_t reader_loop{std::cin, std::cerr, order_queue, token};
-  agent_t reader_agent{std::move(reader_loop), reader_cpu};
-
-  using matcher_loop_t = event_loop_t<queue_source_t<order_queue_t>, matcher_handler_t>;
-  matcher_loop_t matcher_loop{
-    queue_source_t<order_queue_t>{order_queue},
-    matcher_handler_t{book, output_queue, token},
-    token,
-  };
-  agent_t matcher_agent{std::move(matcher_loop), matcher_cpu};
-
-  using writer_loop_t = event_loop_t<queue_source_t<output_queue_t>, writer_handler_t>;
-  writer_loop_t writer_loop{
-    queue_source_t<output_queue_t>{output_queue},
-    writer_handler_t{formatter},
-    token,
-  };
-  agent_t writer_agent{std::move(writer_loop), writer_cpu};
-
-  agent_system_t system{source, std::move(reader_agent), std::move(matcher_agent), std::move(writer_agent)};
-  system.start();
-  system.join();
-
-  uninstall_signal_handler();
   return 0;
 }

@@ -99,22 +99,26 @@ output_event_t = variant<trade_event_t, order_fully_filled_t, order_partially_fi
 
 ```
 test-7cc798/
-├── include/matching/
-│   ├── order_book.hpp          # CLOB + matching
-│   ├── clob_factory.hpp
-│   ├── input_parser.hpp
-│   ├── input_event.hpp
-│   ├── output_event.hpp
-│   ├── output_formatter.hpp
-│   ├── message_types.hpp
-│   ├── compile.cpp             # umbrella TU for clangd/tidy (includes all public headers)
-│   ├── runtime/
-│   │   ├── agent.hpp
-│   │   ├── agent_system.hpp
-│   │   ├── event_loop.hpp
-│   │   ├── spsc_queue.hpp
-│   │   └── signal_handler.hpp
-│   └── benchmark/              # load generator, stats, timers
+├── include/
+│   ├── app/                     # executable argv → config (cxxopts is implementation detail); not in matching_runtime
+│   │   ├── matching_engine_config.hpp
+│   │   └── benchmark_config.hpp
+│   └── matching/
+│       ├── order_book.hpp          # CLOB + matching
+│       ├── clob_factory.hpp
+│       ├── input_parser.hpp
+│       ├── input_event.hpp
+│       ├── output_event.hpp
+│       ├── output_formatter.hpp
+│       ├── message_types.hpp
+│       ├── compile.cpp             # umbrella TU for clangd/tidy (includes all public headers)
+│       ├── runtime/
+│       │   ├── agent.hpp
+│       │   ├── agent_system.hpp
+│       │   ├── event_loop.hpp
+│       │   ├── spsc_queue.hpp
+│       │   └── signal_handler.hpp
+│       └── benchmark/              # load generator, stats, timers
 ├── src/
 │   ├── matching_engine.cpp
 │   ├── benchmark.cpp

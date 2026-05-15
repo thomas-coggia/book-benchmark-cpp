@@ -114,6 +114,7 @@ Bench runs (for example captures in [`benchmark.txt`](benchmark.txt)) use the se
 | Matching and book | `include/matching/order_book.hpp`, `clob_factory.hpp` |
 | Input | `include/matching/input_parser.hpp` |
 | Output lines | `include/matching/output_formatter.hpp` |
+| Executable config | `include/app/matching_engine_config.hpp`, `include/app/benchmark_config.hpp` |
 | Three-thread pipeline | `include/matching/runtime/*`, `src/matching_engine.cpp` |
 | Tests | `test/` (46 GoogleTest cases), golden data in `res/` |
 

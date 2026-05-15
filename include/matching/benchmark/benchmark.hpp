@@ -24,9 +24,8 @@
 
 namespace matching::benchmark {
 
-  /// Per-run configuration knobs that fall out of the CLI overrides on top of an in-binary
-  /// preset baseline. Held flat (no nested config files) so the benchmark stays
-  /// self-describing on the standard output stream.
+  /// Harness-only settings for a benchmark run: warmup, iteration count, optional CPU pinning, and
+  /// latency collection. Populated from the benchmark executable CLI alongside resolved profiles.
   struct benchmark_config_t {
     std::size_t warmup_events{10'000};
     std::size_t iterations{5};
