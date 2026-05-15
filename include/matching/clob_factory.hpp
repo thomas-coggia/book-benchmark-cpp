@@ -7,7 +7,7 @@
 
 namespace matching {
 
-  /// Builds clob_t(memory, emitter); create() consumes emitter (NRVO-friendly).
+  /// Builds @ref clob_t (@ref clob_memory_t + emitter); @c create() consumes emitter (NRVO-friendly).
   template <typename Emitter>
   class clob_factory_t {
   public:

@@ -19,7 +19,7 @@
 
 namespace matching {
 
-  /// Resting order at one price (intrusive FIFO links); stable until retired from the resting PMR arena.
+  /// Resting order at one price (intrusive FIFO); stable address until retired (@ref clob_t resting arena).
   struct alignas(64) order_node_t {
     order_id_t order_id{};
     price_t price{};
@@ -45,7 +45,7 @@ namespace matching {
       return align_up(max_orders * per, 4096);
     }
 
-    /// Arena backing the ladder + lookup PMR pool (overflow to upstream resource).
+    /// Arena sizing for ladder + lookup (@c std::pmr::pool_resource nodes).
     [[nodiscard]] constexpr std::size_t ladder_lookup_arena_byte_count(std::size_t capacity) noexcept {
       constexpr std::size_t per_level = 96;
       constexpr std::size_t ceiling = 32 * 1024 * 1024;
@@ -57,10 +57,10 @@ namespace matching {
 
   }  // namespace detail
 
-  /// Allocator for order-id lookup (same PMR pool as ladders).
+  /// Lookup allocator; shares @c ladder_lookup_pool with @ref order_book_side_t ladders.
   using ladder_lookup_allocator_t = std::pmr::polymorphic_allocator<std::pair<const order_id_t, order_node_t*>>;
 
-  /// FIFO queue head/tail at one resting price.
+  /// Intrusive FIFO at one resting price (one key in the side's ladder map).
   struct price_level_t {
     order_node_t* head{nullptr};
     order_node_t* tail{nullptr};
@@ -68,20 +68,20 @@ namespace matching {
 
   using order_book_level_allocator_t = std::pmr::polymorphic_allocator<std::pair<const price_t, price_level_t>>;
 
-  /// Resting-price map order (asks ↑, bids ↓); best == begin(). Crossing uses !Compare(limit_aggressive,
-  /// limit_resting).
+  /// Price ladder ordering for @c std::pmr::map: asks ascending, bids descending; best == @c begin().
+  /// @ref order_book_side_t::crosses negates the same strict comparison on limits.
   template <side_t Side>
   using resting_levels_compare_t = std::conditional_t<Side == side_t::buy, std::greater<price_t>, std::less<price_t>>;
 
-  /// One resting ladder (buy or sell). Price levels are pmr::map keys; FIFO inside each level.
+  /// One resting price ladder (@c std::pmr::map keys + intrusive FIFO per level).
   ///
-  /// @tparam Side Resting side (buy/sell); drives map comparator and crosses().
+  /// @tparam Side Resting side; selects @ref resting_levels_compare_t and @ref crosses().
   template <side_t Side>
   class order_book_side_t {
   public:
     explicit order_book_side_t(order_book_level_allocator_t alloc) : levels_(alloc) {}
 
-    /// Whether aggressive limit crosses resting quote at these prices (see resting_levels_compare_t).
+    /// Crossing predicate for limits (@sa resting_levels_compare_t).
     [[nodiscard]] bool crosses(price_t aggressive_price, price_t resting_price) const noexcept {
       return !resting_levels_compare_t<Side>{}(aggressive_price, resting_price);
     }
@@ -134,7 +134,7 @@ namespace matching {
       }
     }
 
-    /// Best-priced non-empty level, or nullopt.
+    /// Best quote level (@c begin() under @ref resting_levels_compare_t), or @c std::nullopt.
     [[nodiscard]] std::optional<std::pair<price_t, price_level_t*>> best_level() noexcept {
       if (levels_.empty()) {
         return std::nullopt;
@@ -162,7 +162,7 @@ namespace matching {
     std::pmr::map<price_t, price_level_t, resting_levels_compare_t<Side>> levels_;
   };
 
-  /// PMR storage for one book: ladder/lookup pool + separate resting arena (movable handle).
+  /// PMR arenas for @ref clob_t (movable handle; impl keeps pool addresses stable).
   class clob_memory_t {
     struct impl {
       std::size_t book_capacity;
@@ -209,10 +209,12 @@ namespace matching {
     std::unique_ptr<impl> storage_;
   };
 
-  /// Single-symbol CLOB: Emitter receives trade_event_t, fill events, order_error_event_t.
+  /// Single-symbol central limit book.
   ///
-  /// Resting nodes: monotonic arena. Ladders + id lookup share one PMR pool (best quote == map begin).
-  /// After each fill: trade, aggressive fill, resting fill; leftover aggressive qty may rest without a fill line.
+  /// @tparam Emitter Must handle @ref trade_event_t, fill structs, @ref order_error_event_t.
+  ///
+  /// Resting nodes: monotonic arena (@ref clob_memory_t). Ladders + id lookup share one PMR pool (best == @c begin()).
+  /// Each fill emits trade → aggressive fill → resting fill; residue may rest without a fill line.
   template <typename Emitter>
   class clob_t {
   public:
@@ -234,7 +236,7 @@ namespace matching {
       std::visit([this](const auto& concrete) { (*this)(concrete); }, event);
     }
 
-    /// Match opposite ladder; rest residue. Bad id/qty/price → order_error_event_t (no match).
+    /// Match opposite @ref order_book_side_t; rest residue. Bad fields → @ref order_error_event_t, no match.
     void operator()(const add_order_event_t& event) {
       if (event.order_id <= 0) {
         emitter_(order_error_event_t{event.order_id, order_error_kind_t::invalid_add_order_id});
@@ -261,7 +263,7 @@ namespace matching {
       }
     }
 
-    /// Cancel by id; unknown/inactive → order_error_event_t.
+    /// Cancel by id; missing or inactive → @ref order_error_event_t.
     void operator()(const cancel_order_event_t& event) {
       if (event.order_id <= 0) {
         emitter_(order_error_event_t{event.order_id, order_error_kind_t::invalid_cancel_order_id});
@@ -282,7 +284,7 @@ namespace matching {
       lookup_.erase(it);
     }
 
-    /// No-op (variant dispatch only).
+    /// No-op (@ref shutdown_t overload for @c std::visit).
     void operator()(const shutdown_t&) noexcept {}
 
     [[nodiscard]] const Emitter& emitter() const noexcept {
@@ -302,6 +304,7 @@ namespace matching {
     }
 
   private:
+    /// Allocate from @ref clob_memory_t::resting_order_resource (throws on OOM).
     [[nodiscard]] order_node_t* allocate_resting_node(order_id_t id, side_t side, price_t price, quantity_t qty) {
       void* const raw = memory_.resting_order_resource()->allocate(sizeof(order_node_t), alignof(order_node_t));
       order_node_t* const node = static_cast<order_node_t*>(raw);
@@ -316,7 +319,7 @@ namespace matching {
       return node;
     }
 
-    /// Consume visible liquidity on opposite side until filled or uncrossed.
+    /// Walk opposite ladder best-first until @p incoming is flat or @ref order_book_side_t::crosses fails.
     template <side_t OppositeSide>
     void match_against(order_book_side_t<OppositeSide>& opposite, add_order_event_t& incoming) {
       while (incoming.quantity > 0) {
@@ -335,7 +338,7 @@ namespace matching {
       }
     }
 
-    /// Match FIFO at one price; caller pops empty levels.
+    /// Drain one price level FIFO; @ref match_against erases the map level when empty.
     template <side_t OppositeSide>
     void match_level(
       order_book_side_t<OppositeSide>& opposite,

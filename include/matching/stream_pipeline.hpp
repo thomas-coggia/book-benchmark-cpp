@@ -20,7 +20,7 @@
 
 namespace matching {
 
-  /// Routes book output into output_event_t on the matcher→writer queue; spin yields if full or stopping.
+  /// Routes @ref clob_t output into @ref output_event_t on the matcher→writer queue; spin yields if full or stopping.
   template <std::size_t Capacity>
   class queue_emitter_t {
   public:
@@ -56,7 +56,7 @@ namespace matching {
     std::stop_token token_;
   };
 
-  /// Reads lines → parse_stream → order queue; ends with shutdown_t.
+  /// Reads lines → @ref parse_stream → order queue; ends with @ref shutdown_t.
   template <std::size_t Capacity>
   class reader_loop_t {
   public:
@@ -88,7 +88,7 @@ namespace matching {
     std::stop_token token_;
   };
 
-  /// Applies events to clob_t; forwards shutdown_t downstream and ends the loop (returns true).
+  /// Applies events to @ref clob_t; forwards @ref shutdown_t downstream and ends the loop (returns true).
   template <std::size_t Capacity>
   class matcher_handler_t {
   public:
@@ -121,7 +121,7 @@ namespace matching {
     std::stop_token token_;
   };
 
-  /// Formats output_event_t lines; shutdown_t triggers flush and loop exit (handler returns true).
+  /// Formats @ref output_event_t lines; @ref shutdown_t triggers flush and loop exit (handler returns true).
   class writer_handler_t {
   public:
     explicit writer_handler_t(output_formatter_t& formatter) noexcept : formatter_(formatter) {}

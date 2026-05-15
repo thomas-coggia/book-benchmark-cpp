@@ -66,7 +66,7 @@ namespace matching {
     error = 2,    ///< Ill-formed line — diagnostic emitted to the error sink.
   };
 
-  /// Parse one line into out; on error writes one line to err.
+  /// Parse one line into @p out (@ref input_event_t); on error writes one line to @p err.
   [[nodiscard]] inline parse_status_t parse_line(std::string_view line, input_event_t& out, std::ostream& err) {
     const std::string_view trimmed = detail::trim(line);
     if (trimmed.empty() || trimmed.front() == '#') {
@@ -126,7 +126,7 @@ namespace matching {
     return parse_status_t::error;
   }
 
-  /// Calls parse_line per line; invokes handler on ok; writes errors to err.
+  /// Calls @ref parse_line per line; invokes handler on ok; writes errors to @p err.
   template <typename Handler>
   inline void parse_stream(std::istream& in, Handler&& handler, std::ostream& err) {
     std::string line;

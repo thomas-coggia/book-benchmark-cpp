@@ -39,7 +39,7 @@ namespace matching {
     order_error_kind_t kind{};
   };
 
-  /// Matcher→writer variant (shutdown_t is control-plane only).
+  /// Matcher→writer variant (@ref shutdown_t is control-plane only).
   using output_event_t =
     std::variant<trade_event_t, order_fully_filled_t, order_partially_filled_t, order_error_event_t, shutdown_t>;
 

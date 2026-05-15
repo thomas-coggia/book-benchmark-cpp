@@ -7,7 +7,8 @@
 
 namespace matching {
 
-  /// Wire format: one LF-terminated line per event (msgtypes 2–5; error kinds in order_error_kind_t).
+  /// Wire format: one LF-terminated line per event (msgtypes 2–5 for @ref output_event_t payload rows; third field
+  /// encodes @ref order_error_kind_t).
   class output_formatter_t {
   public:
     explicit output_formatter_t(std::ostream& out) noexcept : out_(&out) {}

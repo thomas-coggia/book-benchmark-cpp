@@ -35,7 +35,7 @@ namespace matching::benchmark {
     std::optional<int> stats_cpu{};
   };
 
-  /// Trade tally on matcher thread; consumer reads after agent join.
+  /// Trade tally on matcher thread (@ref trade_event_t only); consumer reads after agent join.
   struct counting_emitter_t {
     std::size_t* trade_count{nullptr};
 
@@ -83,7 +83,7 @@ namespace matching::benchmark {
     using order_queue_t = runtime::spsc_queue_t<input_event_t, queue_capacity_v>;
     using stats_queue_t = runtime::spsc_queue_t<stats_event_t, queue_capacity_v>;
 
-    /// Feeds order queue then shutdown_t; spins on push until stop if backed up.
+    /// Feeds order queue then @ref shutdown_t; spins on push until stop if backed up.
     class producer_loop_t {
     public:
       producer_loop_t(
@@ -119,7 +119,7 @@ namespace matching::benchmark {
       std::stop_token token_;
     };
 
-    /// Runs book(event); optionally timestamps into stats queue; forwards shutdown_t.
+    /// Runs book(event); optionally timestamps into stats queue; forwards @ref shutdown_t.
     template <typename Book>
     class matcher_handler_t {
     public:
@@ -166,7 +166,7 @@ namespace matching::benchmark {
       std::stop_token token_;
     };
 
-    /// Consumes ping_t into latency accumulator; shutdown_t ends loop.
+    /// Consumes @ref ping_t into latency accumulator; @ref shutdown_t ends loop.
     class stats_handler_t {
     public:
       explicit stats_handler_t(latency_accumulator_t& acc) noexcept : acc_(&acc) {}
@@ -196,7 +196,8 @@ namespace matching::benchmark {
 
   }  // namespace detail
 
-  /// Runs cfg.iterations of producer→matcher→stats; optional latency samples from matcher, aggregated on stats agent.
+  /// Runs cfg.iterations of producer→matcher→stats; optional @ref ping_t latency samples from matcher, aggregated on
+  /// stats agent.
   template <typename MakeFactory>
   [[nodiscard]] inline preset_result_t
   run_preset(const market_profile_t& profile, const benchmark_config_t& cfg, MakeFactory&& make_factory) {
@@ -265,7 +266,7 @@ namespace matching::benchmark {
     return agg;
   }
 
-  /// Prints preset_result_t (human-readable benchmark report).
+  /// Prints @ref preset_result_t (human-readable benchmark report).
   inline void print_preset_result(std::ostream& out, const preset_result_t& r) {
     const auto& p = r.profile;
     std::println(out, "============================================================");
