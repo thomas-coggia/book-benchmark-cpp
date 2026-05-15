@@ -4,7 +4,7 @@ Single-symbol central limit order book: read **CSV-style lines from stdin**, mat
 
 This repo is a **deliberately improvable** sample: it avoids the last layers of proprietary tuning so nothing here reads as personal IP. The emphasis is **design**, **correctness**, and **maintainable code quality**, implemented as a **reasonable, STL-based** matching engine rather than a bleeding-edge exchange stack.
 
-For diagrams, data structures, and complexity notes, see **[`ARCHITECTURE.md`](ARCHITECTURE.md)**.
+For diagrams, data structures, and complexity notes, see **[`ARCHITECTURE.md`](ARCHITECTURE.md)**. For what each benchmark preset represents, see **[`BENCHMARK.md`](BENCHMARK.md)**.
 
 ---
 
@@ -64,6 +64,8 @@ No diff means the run matches the golden file. `EnginePipelineTest.GoldenRecorde
 
 ### 7. Optional: benchmark binary
 
+What each benchmark preset represents: **[`BENCHMARK.md`](BENCHMARK.md)**.
+
 ```bash
 ./build/clang-19-release/bin/benchmark --help
 ```
@@ -117,6 +119,7 @@ Benchmark numbers (for example in [`benchmark.txt`](benchmark.txt)) were capture
 | Input | `include/matching/input_parser.hpp` |
 | Output lines | `include/matching/output_formatter.hpp` |
 | Executable config | `include/app/matching_engine_config.hpp`, `include/app/benchmark_config.hpp` |
+| Benchmark presets | [`BENCHMARK.md`](BENCHMARK.md), `include/matching/benchmark/market_profile.hpp` |
 | Three-thread pipeline | `include/matching/runtime/*`, `src/matching_engine.cpp` |
 | Tests | `test/` (46 GoogleTest cases), golden data in `res/` |
 

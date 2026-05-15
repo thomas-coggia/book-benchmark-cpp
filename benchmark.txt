@@ -5,16 +5,16 @@ Preset: quiet
 ------------------------------------------------------------
 Resolved profile:
   seed              = 42
-  num_orders        = 10000
+  num_orders        = 1000000
   cancel_ratio      = 0.8400
-  aggressive_ratio  = 0.0180
+  aggressive_ratio  = 0.0140
   aggression_spread_k = 0.0450
   buy_bias          = 0.5000
   mu                = 0.000000
   sigma             = 0.000040
   initial_mid       = 10000
   tick_size         = 1
-  place_decay       = 0.6200
+  place_decay       = 0.6000
   qty_log_mean      = 2.0000
   qty_log_stddev    = 0.6000
   qty_min/qty_max   = 1 / 1000
@@ -25,23 +25,23 @@ Resolved profile:
   half-spread ticks base/hot_extra/asym = 1 / 1 / 0
 ------------------------------------------------------------
 Throughput:
-  orders            = 100000
-  trades            = 40
-  total elapsed     = 21.532 ms
-  orders / sec      = 4644166.71
-  trades / sec      = 1857.67
+  orders            = 10000000
+  trades            = 3770
+  total elapsed     = 1674.218 ms
+  orders / sec      = 5972939.47
+  trades / sec      = 2251.80
 Latency (ns):
-  samples           = 100000
-  mean              = 127.6
-  stddev            = 584.1
-  p50 / p95 / p99   = 96.1 / 218.2 / 286.5
+  samples           = 10000000
+  mean              = 104.7
+  stddev            = 340.1
+  p50 / p95 / p99   = 92.5 / 156.2 / 229.9
 
 ============================================================
 Preset: active
 ------------------------------------------------------------
 Resolved profile:
   seed              = 42
-  num_orders        = 10000
+  num_orders        = 1000000
   cancel_ratio      = 0.8000
   aggressive_ratio  = 0.1800
   aggression_spread_k = 0.0760
@@ -61,26 +61,26 @@ Resolved profile:
   half-spread ticks base/hot_extra/asym = 1 / 1 / 0
 ------------------------------------------------------------
 Throughput:
-  orders            = 100000
-  trades            = 450
-  total elapsed     = 22.405 ms
-  orders / sec      = 4463250.54
-  trades / sec      = 20084.63
+  orders            = 10000000
+  trades            = 57070
+  total elapsed     = 1663.383 ms
+  orders / sec      = 6011845.02
+  trades / sec      = 34309.60
 Latency (ns):
-  samples           = 100000
-  mean              = 116.9
-  stddev            = 202.5
-  p50 / p95 / p99   = 93.3 / 203.2 / 263.4
+  samples           = 10000000
+  mean              = 106.3
+  stddev            = 282.3
+  p50 / p95 / p99   = 98.2 / 154.1 / 216.0
 
 ============================================================
 Preset: cancel
 ------------------------------------------------------------
 Resolved profile:
   seed              = 42
-  num_orders        = 10000
+  num_orders        = 1000000
   cancel_ratio      = 0.9500
   aggressive_ratio  = 0.0120
-  aggression_spread_k = 0.0950
+  aggression_spread_k = 0.0600
   buy_bias          = 0.5000
   mu                = 0.000000
   sigma             = 0.000090
@@ -97,24 +97,24 @@ Resolved profile:
   half-spread ticks base/hot_extra/asym = 1 / 1 / 0
 ------------------------------------------------------------
 Throughput:
-  orders            = 100000
-  trades            = 40
-  total elapsed     = 36.546 ms
-  orders / sec      = 2736285.27
-  trades / sec      = 1094.51
+  orders            = 10000000
+  trades            = 1160
+  total elapsed     = 1583.662 ms
+  orders / sec      = 6314480.44
+  trades / sec      = 732.48
 Latency (ns):
-  samples           = 100000
-  mean              = 130.9
-  stddev            = 489.4
-  p50 / p95 / p99   = 105.0 / 217.5 / 281.2
+  samples           = 10000000
+  mean              = 94.8
+  stddev            = 258.0
+  p50 / p95 / p99   = 79.7 / 140.9 / 208.2
 
 ============================================================
 Preset: volatile
 ------------------------------------------------------------
 Resolved profile:
   seed              = 42
-  num_orders        = 10000
-  cancel_ratio      = 0.7800
+  num_orders        = 1000000
+  cancel_ratio      = 0.8200
   aggressive_ratio  = 0.2400
   aggression_spread_k = 0.0550
   buy_bias          = 0.5000
@@ -128,28 +128,28 @@ Resolved profile:
   qty_min/qty_max   = 1 / 1000
   side_autocorr     = 0.7400 (persist sides)
   cancel_depth_lambda = 1.8500
-  heat mean/kappa/sigma = 0.5500 / 0.0260 / 0.1400
+  heat mean/kappa/sigma = 0.5500 / 0.0260 / 0.1800
   hot mul cancel/aggr/sigma = 1.220 / 1.550 / 2.000
   half-spread ticks base/hot_extra/asym = 1 / 3 / 2
 ------------------------------------------------------------
 Throughput:
-  orders            = 100000
-  trades            = 510
-  total elapsed     = 19.258 ms
-  orders / sec      = 5192721.08
-  trades / sec      = 26482.88
+  orders            = 10000000
+  trades            = 27350
+  total elapsed     = 1700.423 ms
+  orders / sec      = 5880889.57
+  trades / sec      = 16084.23
 Latency (ns):
-  samples           = 100000
-  mean              = 111.2
-  stddev            = 327.8
-  p50 / p95 / p99   = 88.3 / 175.8 / 248.8
+  samples           = 10000000
+  mean              = 107.7
+  stddev            = 5132.4
+  p50 / p95 / p99   = 95.4 / 153.0 / 218.1
 
 ============================================================
 Preset: sweep
 ------------------------------------------------------------
 Resolved profile:
   seed              = 42
-  num_orders        = 10000
+  num_orders        = 1000000
   cancel_ratio      = 0.6200
   aggressive_ratio  = 0.7200
   aggression_spread_k = 0.0000
@@ -169,14 +169,14 @@ Resolved profile:
   half-spread ticks base/hot_extra/asym = 1 / 3 / 2
 ------------------------------------------------------------
 Throughput:
-  orders            = 100000
-  trades            = 2320
-  total elapsed     = 19.038 ms
-  orders / sec      = 5252767.26
-  trades / sec      = 121864.20
+  orders            = 10000000
+  trades            = 256010
+  total elapsed     = 1705.842 ms
+  orders / sec      = 5862206.99
+  trades / sec      = 150078.36
 Latency (ns):
-  samples           = 100000
-  mean              = 115.9
-  stddev            = 407.9
-  p50 / p95 / p99   = 100.4 / 176.5 / 253.4
+  samples           = 10000000
+  mean              = 109.3
+  stddev            = 277.3
+  p50 / p95 / p99   = 100.4 / 165.8 / 236.3
 
