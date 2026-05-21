@@ -3,8 +3,8 @@ cmake_minimum_required(VERSION 3.23)
 project(matching VERSION 0.1.0 LANGUAGES CXX)
 
 # --- Compiler hardening -------------------------------------------------------------------
-# Same diagnostic posture as the reference layout: errors on the categories that catch
-# real bugs, warnings on the merely fishy ones, deeper template backtraces while writing.
+# Errors for categories that catch real bugs; warnings for merely fishy ones. Sanitizer
+# flags come from Conan profile [conf] tools.build:cxxflags via CMAKE_*_FLAGS_INIT.
 set(MATCHING_FLAGS_ERROR
   "-Werror=all -Werror=suggest-override -Werror=pedantic -Werror=missing-field-initializers -Werror=sign-compare -Wno-unused"
 )
@@ -15,19 +15,10 @@ set(MATCHING_COMMON_FLAGS
   "${MATCHING_FLAGS_ERROR} ${MATCHING_FLAGS_WARNING} -ftemplate-backtrace-limit=0"
 )
 
-# Optional sanitiser flags, supplied by the sanitiser CMake presets. Empty for normal
-# debug/release builds; non-empty values are appended to both CXX flags and linker flags so
-# they take effect uniformly across compile and link.
-set(MATCHING_SANITIZER_FLAGS "" CACHE STRING "Extra sanitiser flags (e.g. -fsanitize=thread)")
-
-set(CMAKE_C_FLAGS_RELEASE "${MATCHING_COMMON_FLAGS} -O3 -DNDEBUG -ggdb -march=native ${MATCHING_SANITIZER_FLAGS}")
-set(CMAKE_CXX_FLAGS_RELEASE "${MATCHING_COMMON_FLAGS} -O3 -DNDEBUG -ggdb -march=native ${MATCHING_SANITIZER_FLAGS}")
-set(CMAKE_C_FLAGS_DEBUG "${MATCHING_COMMON_FLAGS} -O1 -g -fno-omit-frame-pointer ${MATCHING_SANITIZER_FLAGS}")
-set(CMAKE_CXX_FLAGS_DEBUG "${MATCHING_COMMON_FLAGS} -O1 -g -fno-omit-frame-pointer ${MATCHING_SANITIZER_FLAGS}")
-if(NOT "${MATCHING_SANITIZER_FLAGS}" STREQUAL "")
-  string(APPEND CMAKE_EXE_LINKER_FLAGS " ${MATCHING_SANITIZER_FLAGS}")
-  string(APPEND CMAKE_SHARED_LINKER_FLAGS " ${MATCHING_SANITIZER_FLAGS}")
-endif()
+set(CMAKE_C_FLAGS_RELEASE "${MATCHING_COMMON_FLAGS} -O3 -DNDEBUG -ggdb -march=native")
+set(CMAKE_CXX_FLAGS_RELEASE "${MATCHING_COMMON_FLAGS} -O3 -DNDEBUG -ggdb -march=native")
+set(CMAKE_C_FLAGS_DEBUG "${MATCHING_COMMON_FLAGS} -O1 -g -fno-omit-frame-pointer")
+set(CMAKE_CXX_FLAGS_DEBUG "${MATCHING_COMMON_FLAGS} -O1 -g -fno-omit-frame-pointer")
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)

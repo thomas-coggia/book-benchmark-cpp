@@ -1,0 +1,11 @@
+include(clang-19)
+
+[settings]
+build_type=Debug
+
+[conf]
+user.matching:sanitizer=tsan
+tools.build:cflags+=["-fsanitize=thread"]
+tools.build:cxxflags+=["-fsanitize=thread"]
+tools.build:sharedlinkflags+=["-fsanitize=thread"]
+tools.build:exelinkflags+=["-fsanitize=thread"]

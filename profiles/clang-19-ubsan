@@ -1,0 +1,11 @@
+include(clang-19)
+
+[settings]
+build_type=Debug
+
+[conf]
+user.matching:sanitizer=ubsan
+tools.build:cflags+=["-fsanitize=undefined"]
+tools.build:cxxflags+=["-fsanitize=undefined"]
+tools.build:sharedlinkflags+=["-fsanitize=undefined"]
+tools.build:exelinkflags+=["-fsanitize=undefined"]

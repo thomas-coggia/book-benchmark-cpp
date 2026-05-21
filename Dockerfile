@@ -8,30 +8,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         clang-19 \
         lld-19 \
+        libclang-rt-19-dev \
         gcc-14 \
         g++-14 \
         libstdc++-14-dev \
         cmake \
         python3 \
-        python3-pip \
+        pipx \
         ca-certificates \
         git \
     && rm -rf /var/lib/apt/lists/*
 
-# Conan 2 — single source of truth for third-party deps. Production code has none; the only
-# external library declared is GoogleTest (test_requires).
-RUN pip install --break-system-packages "conan==2.*"
-
-# Make clang-19 the default system compiler so:
-#   * `conan profile detect --force` records clang-19,
-#   * any `conan install` building gtest from source picks clang-19 too,
-#   * the README's vanilla `conan install ... -s compiler=clang ...` line just works.
-ENV CC=/usr/bin/clang-19 \
-    CXX=/usr/bin/clang++-19
-
-# First-run helper: write a default Conan profile if none exists yet. Failures are
-# tolerated at image-build time (the user can always re-run inside the container).
-RUN conan profile detect --force || true
+# Install conan in an isolated venv under /opt and expose the binary in
+# /usr/local/bin so it's on PATH for every user. No PEP 668 override needed.
+ENV PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin
+RUN pipx install "conan==2.*"
 
 WORKDIR /app
 

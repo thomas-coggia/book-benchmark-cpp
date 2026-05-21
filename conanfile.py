@@ -1,15 +1,9 @@
-"""Conan 2 recipe for the matching engine.
-
-Production matching code stays third-party-free in library TUs. Dependencies supplied here:
-
-- **cxxopts** (required): CLI parsing for `matching_engine` and `benchmark` executables only.
-- **gtest** (`test_requires`): linked only from tests; never part of `matching::matching`.
-"""
+"""Conan 2 recipe. `conan build . -pr:a=<profile-from-profiles/>` is the entry point."""
 
 import os
 
 from conan import ConanFile
-from conan.tools.cmake import CMakeToolchain, CMakeDeps, cmake_layout
+from conan.tools.cmake import CMake, CMakeDeps, CMakeToolchain
 
 
 class MatchingConan(ConanFile):
@@ -17,35 +11,17 @@ class MatchingConan(ConanFile):
     version = "0.1.0"
     settings = "os", "compiler", "build_type", "arch"
 
-    options = {"matching_preset": ["standard", "asan", "ubsan", "tsan"]}
-    default_options = {"matching_preset": "standard"}
-
     def layout(self):
-        # cmake_layout(): toolchain + Conan CMakePresets under <binaryDir>/generators/.
-        # Standard presets: directories clang-19-debug / clang-19-release (matches CMakePresets names).
-        # Sanitizer presets: flat clang-19-<slug>/ without an extra Debug/ leaf (manual folders.build).
+        self.sanitizer = self.conf.get("user.matching:sanitizer")
+        slug = self.sanitizer or str(self.settings.build_type).lower()
         self.folders.source = "."
-        if self.options.matching_preset == "standard":
-            self.folders.build_folder_vars = [
-                "settings.compiler",
-                "settings.compiler.version",
-                "settings.build_type",
-            ]
-            cmake_layout(self)
-            return
-
-        slug = str(self.options.matching_preset)
-        compiler = self.settings.get_safe("compiler")
-        ver = self.settings.get_safe("compiler.version")
-        self.folder_slug = slug
-        self.folders.build = os.path.join("build", f"{compiler}-{ver}-{slug}")
+        self.folders.build = os.path.join(
+            "build",
+            f"{self.settings.compiler}-{self.settings.compiler.version}-{slug}",
+        )
         self.folders.generators = os.path.join(self.folders.build, "generators")
-        self.folders.build_folder_vars = [
-            "settings.compiler",
-            "settings.compiler.version",
-            "self.folder_slug",
-            "settings.build_type",
-        ]
+        if self.sanitizer:
+            self.folders.build_folder_vars = ["self.sanitizer"]
 
     def requirements(self):
         self.requires("cxxopts/3.3.1")
@@ -54,7 +30,12 @@ class MatchingConan(ConanFile):
         self.test_requires("gtest/1.14.0")
 
     def generate(self):
-        toolchain = CMakeToolchain(self)
-        toolchain.user_presets_path = "ConanPresets.json"
-        toolchain.generate()
+        tc = CMakeToolchain(self)
+        tc.cache_variables["CMAKE_EXPORT_COMPILE_COMMANDS"] = "ON"
+        tc.generate()
         CMakeDeps(self).generate()
+
+    def build(self):
+        cmake = CMake(self)
+        cmake.configure()
+        cmake.build()

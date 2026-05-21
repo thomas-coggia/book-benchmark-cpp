@@ -1,0 +1,11 @@
+include(clang-19)
+
+[settings]
+build_type=Debug
+
+[conf]
+user.matching:sanitizer=asan
+tools.build:cflags+=["-fsanitize=address,undefined"]
+tools.build:cxxflags+=["-fsanitize=address,undefined"]
+tools.build:sharedlinkflags+=["-fsanitize=address,undefined"]
+tools.build:exelinkflags+=["-fsanitize=address,undefined"]

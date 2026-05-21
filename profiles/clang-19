@@ -1,0 +1,13 @@
+# Shared toolchain base. Included by every clang-19-* variant profile.
+
+[settings]
+os=Linux
+arch=x86_64
+compiler=clang
+compiler.version=19
+compiler.cppstd=23
+compiler.libcxx=libstdc++11
+
+[buildenv]
+CC=/usr/bin/clang-19
+CXX=/usr/bin/clang++-19

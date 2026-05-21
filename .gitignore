@@ -3,4 +3,5 @@
 build/
 .conan2/
 CMakeUserPresets.json
-ConanPresets.json
+Testing/
+out.txt
