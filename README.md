@@ -1,10 +1,10 @@
 # Limit-order matching engine
 
-Single-symbol central limit order book: read **CSV-style lines from stdin**, match with **price–time priority**, write trades and fills to **stdout**. **Parse errors** go to **stderr**; the process keeps parsing (no crash on garbage).
+Single-symbol central limit order book with **GTC, IOC, and FOK** time-in-force: read **CSV-style lines from stdin**, match with **price–time priority**, write trades and fills to **stdout**. Ill-formed input is set aside on **stderr**; processing continues gracefully.
 
-This repo is a **deliberately improvable** sample: it avoids the last layers of proprietary tuning so nothing here reads as personal IP. The emphasis is **design**, **correctness**, and **maintainable code quality**, implemented as a **reasonable, STL-based** matching engine rather than a bleeding-edge exchange stack.
+This repo presents a **clear, shareable reference** where **design**, **correctness**, and **maintainable code quality** come first. The matching core is a **reasonable, STL-based** engine. It shows how far **software design** can take you on standard library building blocks, before diving into algorithmic optimizations. Venue-specific know-how is not published here.
 
-On a **consumer-grade laptop**, the matcher sustains **~6M orders/second** at **~100 ns p50** latency across **five synthetic market regimes** (calm, active, quote-heavy, volatile, sweep). That is a fair baseline for an **STL-only** implementation, and the **consistency across regimes** matters as much as the headline number. Full data in [`benchmark.txt`](benchmark.txt).
+On a **consumer-grade laptop**, the matcher sustains **~6M orders/second** at **~100 ns p50** latency across **five synthetic market regimes** (calm, active, quote-heavy, volatile, sweep). That is a fair baseline for an **STL-only** implementation, and the **consistency across regimes** matters as much as the headline number. Full data in `[benchmark.txt](benchmark.txt)`.
 
 For diagrams, data structures, and complexity notes, see [ARCHITECTURE.md](ARCHITECTURE.md). For what each benchmark preset represents, see [BENCHMARK.md](BENCHMARK.md).
 
@@ -107,20 +107,24 @@ Three-letter message tags, comma-separated fields, exactly one output line per m
 
 **Inputs**
 
-| Tag | Line shape                          | Meaning |
-| --- | ----------------------------------- | ------- |
-| ADD | `ADD,id,side,qty,price,tif`         | Add order. `side ∈ {BUY, SLL}`; `tif ∈ {GTC, IOC, FOK}` |
-| CXL | `CXL,id`                            | Cancel a resting order |
+
+| Tag | Line shape                  | Meaning                                                 |
+| --- | --------------------------- | ------------------------------------------------------- |
+| ADD | `ADD,id,side,qty,price,tif` | Add order. `side ∈ {BUY, SLL}`; `tif ∈ {GTC, IOC, FOK}` |
+| CXL | `CXL,id`                    | Cancel a resting order                                  |
+
 
 **Outputs** (terminal state per input; `filled + resting + cancelled == original_qty` for ADD)
 
-| Tag | Line shape                                          | Meaning |
-| --- | --------------------------------------------------- | ------- |
-| TRD | `TRD,aggressive-id,resting-id,qty`                  | Bilateral trade |
-| RST | `RST,id,filled,resting`                             | Accepted on the book; residue rests (GTC only) |
-| FIL | `FIL,id,filled`                                     | Fully filled |
-| CAN | `CAN,id,filled,cancelled,cause`                     | Cancelled; `cause ∈ {USR, IOC, FOK}` |
-| REJ | `REJ,id,code`                                       | Rejected; `code ∈ {DUP, UNK, IQT, IPR, IID}` |
+
+| Tag | Line shape                         | Meaning                                        |
+| --- | ---------------------------------- | ---------------------------------------------- |
+| TRD | `TRD,aggressive-id,resting-id,qty` | Bilateral trade                                |
+| RST | `RST,id,filled,resting`            | Accepted on the book; residue rests (GTC only) |
+| FIL | `FIL,id,filled`                    | Fully filled                                   |
+| CAN | `CAN,id,filled,cancelled,cause`    | Cancelled; `cause ∈ {USR, IOC, FOK}`           |
+| REJ | `REJ,id,code`                      | Rejected; `code ∈ {DUP, UNK, IQT, IPR, IID}`   |
+
 
 - Each matcher-visible input yields @c TRD rows per bilateral fill step, plus exactly one terminal row for the input order.
 - Cancel causes: `USR` (explicit `CXL`), `IOC` (IOC residue), `FOK` (fill-or-kill could not fully execute).
@@ -141,7 +145,7 @@ Three-letter message tags, comma-separated fields, exactly one output line per m
 | Output lines          | `include/matching/output_formatter.hpp`                                         |
 | Executable config     | `include/app/matching_engine_config.hpp`, `include/app/benchmark_config.hpp`    |
 | Benchmark presets     | `[BENCHMARK.md](BENCHMARK.md)`, `include/matching/benchmark/market_profile.hpp` |
-| Three-thread pipeline | `include/matching/runtime/*`, `src/matching_engine.cpp`                         |
+| Three-thread pipeline | `include/matching/runtime/`*, `src/matching_engine.cpp`                         |
 | Tests                 | `test/` (46 GoogleTest cases), golden data in `res/`                            |
 
 
@@ -170,6 +174,7 @@ ctest --preset conan-release
 
 `CMakeToolchain` writes `CMakeUserPresets.json` at the repo root; CMake discovers it natively, so after any `conan build` you can rebuild incrementally without re-running Conan:
 
+
 | Profile            | CMake preset name   |
 | ------------------ | ------------------- |
 | `clang-19-release` | `conan-release`     |
@@ -177,6 +182,7 @@ ctest --preset conan-release
 | `clang-19-asan`    | `conan-asan-debug`  |
 | `clang-19-ubsan`   | `conan-ubsan-debug` |
 | `clang-19-tsan`    | `conan-tsan-debug`  |
+
 
 ```bash
 cmake --build --preset conan-release
