@@ -1,0 +1,5 @@
+# Cancel unknown ids after both orders fully matched.
+ADD,1001,BUY,5,100,GTC
+ADD,1002,SLL,5,100,GTC
+CXL,1001
+CXL,1002

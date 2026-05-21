@@ -1,0 +1,4 @@
+# Semantic rejects handled by the matcher (parser accepts ill-valued fields).
+ADD,0,BUY,5,100,GTC
+ADD,901,BUY,0,100,GTC
+ADD,902,BUY,5,0,GTC

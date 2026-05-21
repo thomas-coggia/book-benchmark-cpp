@@ -1,0 +1,3 @@
+# GTC partial fill: aggressive residue rests on the book.
+ADD,801,SLL,3,100,GTC
+ADD,802,BUY,5,100,GTC

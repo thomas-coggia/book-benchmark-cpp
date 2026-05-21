@@ -54,14 +54,14 @@ Conan's `direct_deploy` extracts the package into `install/direct_deploy/matchin
 ### 5. Run the engine on a recorded sample
 
 ```bash
-./install/direct_deploy/matching/bin/matching_engine < res/sample_1.stdin.txt > out.txt
+./install/direct_deploy/matching/bin/matching_engine < res/sample_01.stdin.txt > out.txt
 cat out.txt
 ```
 
 ### 6. Compare with recorded stdout
 
 ```bash
-diff res/sample_1.stdout.txt out.txt
+diff res/sample_01.stdout.txt out.txt
 ```
 
 No diff means the run matches the golden file. `EnginePipelineTest.GoldenRecordedStdoutMatchesSampleFiles` checks the same under `ctest`.
@@ -103,23 +103,31 @@ Benchmark numbers (for example in `[benchmark.txt](benchmark.txt)`) were capture
 
 ## Wire format (message types)
 
-Three-letter message tags (comma-separated fields; see `matching_engine --help`).
+Three-letter message tags, comma-separated fields, exactly one output line per matcher-visible input event (see `matching_engine --help`).
 
+**Inputs**
 
-| Tag | Line shape              | Meaning                           |
-| --- | ----------------------- | --------------------------------- |
-| ADD | `ADD,id,side,qty,price` | Add order                         |
-| CXL | `CXL,id`                | Cancel                            |
-| TRD | `TRD,qty,price`         | Trade (output)                    |
-| FFL | `FFL,id`                | Fully filled (output)             |
-| PFL | `PFL,id,remaining`      | Partially filled (output)         |
-| ERR | `ERR,id,kind`           | Error (output); `kind` is numeric |
+| Tag | Line shape                          | Meaning |
+| --- | ----------------------------------- | ------- |
+| ADD | `ADD,id,side,qty,price,tif`         | Add order. `side ∈ {BUY, SLL}`; `tif ∈ {GTC, IOC, FOK}` |
+| CXL | `CXL,id`                            | Cancel a resting order |
 
+**Outputs** (terminal state per input; `filled + resting + cancelled == original_qty` for ADD)
 
-- Side must be `**BUY`** or `**SLL**` (exact spelling).
-- Blank lines and lines starting with `**#**` are skipped.  
-- Quantities and prices are integers (ticks) in this build.  
-- Example recorded pair: `res/sample_1.stdin.txt` → `res/sample_1.stdout.txt`.
+| Tag | Line shape                                          | Meaning |
+| --- | --------------------------------------------------- | ------- |
+| TRD | `TRD,aggressive-id,resting-id,qty`                  | Bilateral trade |
+| RST | `RST,id,filled,resting`                             | Accepted on the book; residue rests (GTC only) |
+| FIL | `FIL,id,filled`                                     | Fully filled |
+| CAN | `CAN,id,filled,cancelled,cause`                     | Cancelled; `cause ∈ {USR, IOC, FOK}` |
+| REJ | `REJ,id,code`                                       | Rejected; `code ∈ {DUP, UNK, IQT, IPR, IID}` |
+
+- Each matcher-visible input yields @c TRD rows per bilateral fill step, plus exactly one terminal row for the input order.
+- Cancel causes: `USR` (explicit `CXL`), `IOC` (IOC residue), `FOK` (fill-or-kill could not fully execute).
+- Reject codes: `DUP` (duplicate id), `UNK` (unknown cancel id or cancel of already-filled order), `IQT` (non-positive quantity), `IPR` (non-positive price), `IID` (non-positive id).
+- Blank lines and lines starting with `#` are skipped.
+- Quantities and prices are integers (ticks) in this build.
+- Example recorded pairs: `res/sample_01.stdin.txt` … `res/sample_10.stdout.txt` (IOC/FOK, rejects, partial rests, parse errors).
 
 ---
 
@@ -152,12 +160,12 @@ Three-letter message tags (comma-separated fields; see `matching_engine --help`)
 
 ## Build details
 
-**Dev iteration.** Skip `conan create` while iterating — `conan build` configures, builds, and lets you run tests in place without going through the full package lifecycle:
+**Dev iteration.** Skip `conan create` while iterating — `conan build` configures and builds in place without going through the full package lifecycle; run `ctest` separately to exercise the suite:
 
 ```bash
 conan build . -pr:a=profiles/clang-19-release --build=missing
 ctest --preset conan-release
-./build/clang-19-release/bin/matching_engine < res/sample_1.stdin.txt
+./build/clang-19-release/bin/matching_engine < res/sample_01.stdin.txt
 ```
 
 `CMakeToolchain` writes `CMakeUserPresets.json` at the repo root; CMake discovers it natively, so after any `conan build` you can rebuild incrementally without re-running Conan:

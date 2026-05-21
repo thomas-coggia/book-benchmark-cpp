@@ -58,11 +58,24 @@ namespace matching {
     }
 
     [[nodiscard]] inline std::optional<side_t> parse_side_token(std::string_view sv) noexcept {
-      if (sv == "BUY") {
+      if (sv == wire_buy) {
         return side_t::buy;
       }
-      if (sv == "SLL") {
+      if (sv == wire_sell) {
         return side_t::sell;
+      }
+      return std::nullopt;
+    }
+
+    [[nodiscard]] inline std::optional<tif_t> parse_tif_token(std::string_view sv) noexcept {
+      if (sv == wire_tif_gtc) {
+        return tif_t::gtc;
+      }
+      if (sv == wire_tif_ioc) {
+        return tif_t::ioc;
+      }
+      if (sv == wire_tif_fok) {
+        return tif_t::fok;
       }
       return std::nullopt;
     }
@@ -76,7 +89,13 @@ namespace matching {
     error = 2,    ///< Ill-formed line — diagnostic emitted to the error sink.
   };
 
-  /// Parse one line into @p out (@ref input_event_t); on error writes one line to @p err.
+  /// Parse one line into @p out (@ref input_event_t).
+  ///
+  /// Only format-level validation is performed here: tag, field count, integer/side/TIF tokens.
+  /// Value-bound checks (positive id/qty/price, id collision, unknown cancel id) are the
+  /// matcher's responsibility — they produce @ref order_rejected_event_t on the output stream
+  /// rather than diagnostics on @p err. Failures of pure shape go to @p err and the stream
+  /// continues.
   [[nodiscard]] inline parse_status_t parse_line(std::string_view line, input_event_t& out, std::ostream& err) {
     const std::string_view trimmed = detail::trim(line);
     if (trimmed.empty() || trimmed.front() == '#') {
@@ -91,8 +110,10 @@ namespace matching {
       const std::string_view side_token = detail::next_field(cursor);
       const auto quantity = detail::parse_int<quantity_t>(detail::next_field(cursor));
       const auto price = detail::parse_int<price_t>(detail::next_field(cursor));
+      const std::string_view tif_token = detail::next_field(cursor);
       const auto side = detail::parse_side_token(side_token);
-      if (!order_id || !quantity || !price || !cursor.empty()) {
+      const auto tif = detail::parse_tif_token(tif_token);
+      if (!order_id || !quantity || !price || tif_token.empty() || !cursor.empty()) {
         std::println(err, "Ill-formed AddOrderRequest: {}", trimmed);
         return parse_status_t::error;
       }
@@ -100,11 +121,11 @@ namespace matching {
         std::println(err, "Invalid side token '{}' in AddOrderRequest: {}", side_token, trimmed);
         return parse_status_t::error;
       }
-      if (*quantity <= 0 || *price <= 0 || *order_id <= 0) {
-        std::println(err, "Non-positive field in AddOrderRequest: {}", trimmed);
+      if (!tif.has_value()) {
+        std::println(err, "Invalid time-in-force token '{}' in AddOrderRequest: {}", tif_token, trimmed);
         return parse_status_t::error;
       }
-      out = add_order_event_t{*order_id, *side, *quantity, *price};
+      out = add_order_event_t{*order_id, *side, *quantity, *price, *tif};
       return parse_status_t::ok;
     }
 
@@ -112,10 +133,6 @@ namespace matching {
       const auto order_id = detail::parse_int<order_id_t>(detail::next_field(cursor));
       if (!order_id || !cursor.empty()) {
         std::println(err, "Ill-formed CancelOrderRequest: {}", trimmed);
-        return parse_status_t::error;
-      }
-      if (*order_id <= 0) {
-        std::println(err, "Non-positive order id in CancelOrderRequest: {}", trimmed);
         return parse_status_t::error;
       }
       out = cancel_order_event_t{*order_id};

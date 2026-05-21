@@ -64,6 +64,7 @@ namespace matching {
   struct price_level_t {
     order_node_t* head{nullptr};
     order_node_t* tail{nullptr};
+    quantity_t total_quantity{};
   };
 
   using order_book_level_allocator_t = std::pmr::polymorphic_allocator<std::pair<const price_t, price_level_t>>;
@@ -90,6 +91,7 @@ namespace matching {
     void append(order_node_t* order) {
       const price_t price = order->price;
       price_level_t& level = levels_.try_emplace(price).first->second;
+      level.total_quantity += order->quantity;
 
       if (level.tail == nullptr) {
         level.head = order;
@@ -111,6 +113,8 @@ namespace matching {
       if (it == levels_.end()) {
         return;
       }
+
+      it->second.total_quantity -= order->quantity;
 
       order_node_t* prev = order->prev_same_price;
       order_node_t* next = order->next_same_price;
@@ -156,6 +160,21 @@ namespace matching {
 
     [[nodiscard]] std::size_t depth() const noexcept {
       return levels_.size();
+    }
+
+    /// Sum of @ref price_level_t::total_quantity at/through @p limit_price, capped at @p need (FOK probe).
+    [[nodiscard]] quantity_t fillable_quantity(price_t limit_price, quantity_t need) const noexcept {
+      quantity_t available = 0;
+      for (const auto& [price, level] : levels_) {
+        if (!crosses(limit_price, price)) {
+          break;
+        }
+        available += level.total_quantity;
+        if (available >= need) {
+          return need;
+        }
+      }
+      return available;
     }
 
   private:
@@ -211,10 +230,16 @@ namespace matching {
 
   /// Single-symbol central limit book.
   ///
-  /// @tparam Emitter Must handle @ref trade_event_t, fill structs, @ref order_error_event_t.
+  /// @tparam Emitter Must handle @ref trade_event_t and the terminal order output structs.
   ///
-  /// Resting nodes: monotonic arena (@ref clob_memory_t). Ladders + id lookup share one PMR pool (best == @c begin()).
-  /// Each fill emits trade → aggressive fill → resting fill; residue may rest without a fill line.
+  /// Resting nodes live in a monotonic arena (@ref clob_memory_t). Ladders + id lookup share one
+  /// PMR pool (best == @c begin()). For each @ref add_order_event_t the matcher walks the
+  /// opposite ladder under price–time priority, accumulates fills into a single result, then
+  /// emits one of @ref order_resting_event_t, @ref order_filled_event_t,
+  /// @ref order_cancelled_event_t, or @ref order_rejected_event_t based on the order's @ref tif_t
+  /// and what could actually be matched. @ref cancel_order_event_t produces a single
+  /// @ref order_cancelled_event_t (cause @ref cancel_cause_t::user_request) or
+  /// @ref order_rejected_event_t.
   template <typename Emitter>
   class clob_t {
   public:
@@ -236,45 +261,65 @@ namespace matching {
       std::visit([this](const auto& concrete) { (*this)(concrete); }, event);
     }
 
-    /// Match opposite @ref order_book_side_t; rest residue. Bad fields → @ref order_error_event_t, no match.
+    /// Match opposite @ref order_book_side_t; emit exactly one terminal event for the add.
     void operator()(const add_order_event_t& event) {
       if (event.order_id <= 0) {
-        emitter_(order_error_event_t{event.order_id, order_error_kind_t::invalid_add_order_id});
+        emitter_(order_rejected_event_t{event.order_id, reject_code_t::invalid_order_id});
         return;
       }
       if (event.quantity <= 0) {
-        emitter_(order_error_event_t{event.order_id, order_error_kind_t::invalid_add_quantity});
+        emitter_(order_rejected_event_t{event.order_id, reject_code_t::invalid_quantity});
         return;
       }
       if (event.price <= 0) {
-        emitter_(order_error_event_t{event.order_id, order_error_kind_t::invalid_add_price});
+        emitter_(order_rejected_event_t{event.order_id, reject_code_t::invalid_price});
         return;
       }
 
+      if (event.tif == tif_t::fok && !fillable_at_limit(event)) {
+        emitter_(order_cancelled_event_t{event.order_id, quantity_t{0}, event.quantity, cancel_cause_t::fill_or_kill});
+        return;
+      }
+
+      quantity_t filled_quantity{};
       add_order_event_t residual = event;
       if (event.side == side_t::buy) {
-        match_against(asks_, residual);
+        match_against(asks_, residual, filled_quantity);
       } else {
-        match_against(bids_, residual);
+        match_against(bids_, residual, filled_quantity);
       }
 
-      if (residual.quantity > 0) {
-        rest_order(residual);
+      const quantity_t residue = residual.quantity;
+      if (residue == 0) {
+        emitter_(order_filled_event_t{event.order_id, filled_quantity});
+        return;
       }
+      if (event.tif == tif_t::gtc) {
+        if (!rest_order(residual)) {
+          emitter_(order_rejected_event_t{event.order_id, reject_code_t::duplicate_order_id});
+          return;
+        }
+        emitter_(order_resting_event_t{event.order_id, filled_quantity, residue});
+        return;
+      }
+      const cancel_cause_t cause =
+        event.tif == tif_t::ioc ? cancel_cause_t::immediate_or_cancel : cancel_cause_t::fill_or_kill;
+      emitter_(order_cancelled_event_t{event.order_id, filled_quantity, residue, cause});
     }
 
-    /// Cancel by id; missing or inactive → @ref order_error_event_t.
+    /// Cancel by id; emit exactly one terminal event (@c CAN on success, @c REJ otherwise).
     void operator()(const cancel_order_event_t& event) {
       if (event.order_id <= 0) {
-        emitter_(order_error_event_t{event.order_id, order_error_kind_t::invalid_cancel_order_id});
+        emitter_(order_rejected_event_t{event.order_id, reject_code_t::invalid_order_id});
         return;
       }
       const auto it = lookup_.find(event.order_id);
       if (it == lookup_.end() || !it->second->active) {
-        emitter_(order_error_event_t{event.order_id, order_error_kind_t::unknown_order_id});
+        emitter_(order_rejected_event_t{event.order_id, reject_code_t::unknown_order_id});
         return;
       }
       order_node_t* node = it->second;
+      const quantity_t cancelled = node->quantity;
       if (node->side == side_t::buy) {
         bids_.detach(node);
       } else {
@@ -282,6 +327,7 @@ namespace matching {
       }
       node->active = false;
       lookup_.erase(it);
+      emitter_(order_cancelled_event_t{event.order_id, quantity_t{0}, cancelled, cancel_cause_t::user_request});
     }
 
     /// No-op (@ref shutdown_t overload for @c std::visit).
@@ -304,6 +350,10 @@ namespace matching {
     }
 
   private:
+    struct match_level_result_t {
+      quantity_t filled_quantity{};
+    };
+
     /// Allocate from @ref clob_memory_t::resting_order_resource (throws on OOM).
     [[nodiscard]] order_node_t* allocate_resting_node(order_id_t id, side_t side, price_t price, quantity_t qty) {
       void* const raw = memory_.resting_order_resource()->allocate(sizeof(order_node_t), alignof(order_node_t));
@@ -321,9 +371,18 @@ namespace matching {
       );
     }
 
+    /// True if crossed levels hold at least @c incoming.quantity in aggregate (@ref fillable_quantity probe).
+    [[nodiscard]] bool fillable_at_limit(const add_order_event_t& incoming) const noexcept {
+      const quantity_t need = incoming.quantity;
+      const quantity_t available = incoming.side == side_t::buy ? asks_.fillable_quantity(incoming.price, need)
+                                                                : bids_.fillable_quantity(incoming.price, need);
+      return available >= need;
+    }
+
     /// Walk opposite ladder best-first until @p incoming is flat or @ref order_book_side_t::crosses fails.
     template <side_t OppositeSide>
-    void match_against(order_book_side_t<OppositeSide>& opposite, add_order_event_t& incoming) {
+    void
+    match_against(order_book_side_t<OppositeSide>& opposite, add_order_event_t& incoming, quantity_t& filled_quantity) {
       while (incoming.quantity > 0) {
         const auto best = opposite.best_level();
         if (!best) {
@@ -333,7 +392,8 @@ namespace matching {
         if (!opposite.crosses(incoming.price, level_price)) {
           return;
         }
-        match_level(opposite, *level, level_price, incoming);
+        match_level_result_t level_result = match_level(opposite, *level, level_price, incoming);
+        filled_quantity += level_result.filled_quantity;
         if (level->head == nullptr) {
           opposite.pop_best_level();
         }
@@ -342,12 +402,13 @@ namespace matching {
 
     /// Drain one price level FIFO; @ref match_against erases the map level when empty.
     template <side_t OppositeSide>
-    void match_level(
+    [[nodiscard]] match_level_result_t match_level(
       order_book_side_t<OppositeSide>& opposite,
       price_level_t& level,
       price_t level_price,
       add_order_event_t& incoming
     ) {
+      quantity_t filled_quantity{};
       order_node_t* cursor = level.head;
       while (cursor != nullptr && incoming.quantity > 0) {
         order_node_t* const resting = cursor;
@@ -357,34 +418,25 @@ namespace matching {
 
         const quantity_t resting_qty = resting->quantity;
         const quantity_t trade_qty = std::min(incoming.quantity, resting_qty);
-        const price_t trade_price = level_price;
-        const order_id_t resting_id = resting->order_id;
-
-        const quantity_t aggressive_remaining = incoming.quantity - trade_qty;
         const quantity_t resting_remaining = resting_qty - trade_qty;
 
-        emitter_(trade_event_t{trade_qty, trade_price});
-        emit_fill(incoming.order_id, aggressive_remaining);
-        emit_fill(resting_id, resting_remaining);
+        emitter_(trade_event_t{incoming.order_id, resting->order_id, trade_qty});
+        filled_quantity += trade_qty;
+        level.total_quantity -= trade_qty;
 
-        incoming.quantity = aggressive_remaining;
+        incoming.quantity -= trade_qty;
 
         if (resting_remaining == 0) {
+          emitter_(order_filled_event_t{resting->order_id, trade_qty});
           retire_resting(opposite, level, resting);
         } else {
           resting->quantity = resting_remaining;
+          emitter_(order_resting_event_t{resting->order_id, trade_qty, resting_remaining});
         }
 
         cursor = next;
       }
-    }
-
-    void emit_fill(order_id_t id, quantity_t remaining) {
-      if (remaining == 0) {
-        emitter_(order_fully_filled_t{id});
-      } else {
-        emitter_(order_partially_filled_t{id, remaining});
-      }
+      return match_level_result_t{filled_quantity};
     }
 
     template <side_t OppositeSide>
@@ -409,20 +461,19 @@ namespace matching {
       (void)opposite;
     }
 
-    void rest_order(const add_order_event_t& residual) {
+    [[nodiscard]] bool rest_order(const add_order_event_t& residual) {
       order_node_t* const node =
         allocate_resting_node(residual.order_id, residual.side, residual.price, residual.quantity);
       if (!lookup_.try_emplace(residual.order_id, node).second) {
-        // Duplicate id: discard allocated node (lookup unchanged).
-        emitter_(order_error_event_t{residual.order_id, order_error_kind_t::duplicate_order_id});
         node->active = false;
-        return;
+        return false;
       }
       if (residual.side == side_t::buy) {
         bids_.append(node);
       } else {
         asks_.append(node);
       }
+      return true;
     }
 
     clob_memory_t memory_;

@@ -14,7 +14,6 @@
 
 namespace matching::benchmark {
 
-  // Discard sink: drives the engine without recording outputs, only counting trades.
   struct trade_counter_t {
     std::size_t* trades{nullptr};
 
@@ -22,11 +21,13 @@ namespace matching::benchmark {
       ++*trades;
     }
 
-    void operator()(const order_fully_filled_t&) const noexcept {}
+    void operator()(const order_resting_event_t&) const noexcept {}
 
-    void operator()(const order_partially_filled_t&) const noexcept {}
+    void operator()(const order_filled_event_t&) const noexcept {}
 
-    void operator()(const order_error_event_t&) const noexcept {}
+    void operator()(const order_cancelled_event_t&) const noexcept {}
+
+    void operator()(const order_rejected_event_t&) const noexcept {}
   };
 
   struct GeneratorSanityTest : ::testing::TestWithParam<market_profile_t> {};

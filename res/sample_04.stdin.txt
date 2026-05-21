@@ -1,5 +1,5 @@
 # Add then cancel; interleaved lines are ill-formed but must not stop the stream.
-ADD,401,BUY,10,95
+ADD,401,BUY,10,95,GTC
 NOT_A_RECORD
 ADD,1,BUY,5
 CXL,401

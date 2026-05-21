@@ -33,15 +33,19 @@ namespace matching {
       push(output_event_t{event});
     }
 
-    void operator()(const order_fully_filled_t& event) noexcept {
+    void operator()(const order_resting_event_t& event) noexcept {
       push(output_event_t{event});
     }
 
-    void operator()(const order_partially_filled_t& event) noexcept {
+    void operator()(const order_filled_event_t& event) noexcept {
       push(output_event_t{event});
     }
 
-    void operator()(const order_error_event_t& event) noexcept {
+    void operator()(const order_cancelled_event_t& event) noexcept {
+      push(output_event_t{event});
+    }
+
+    void operator()(const order_rejected_event_t& event) noexcept {
       push(output_event_t{event});
     }
 

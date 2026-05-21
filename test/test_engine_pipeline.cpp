@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <memory>
 #include <sstream>
@@ -90,10 +91,11 @@ namespace matching {
   TEST(EnginePipelineTest, GoldenRecordedStdoutMatchesSampleFiles) {
     const std::filesystem::path root = matching_test_res_dir;
 
-    for (const int ix : {1, 2, 3, 4, 5}) {
-      const std::filesystem::path in_path = root / ("sample_" + std::to_string(ix) + ".stdin.txt");
-      const std::filesystem::path out_path = root / ("sample_" + std::to_string(ix) + ".stdout.txt");
-      const std::filesystem::path err_path = root / ("sample_" + std::to_string(ix) + ".stderr.txt");
+    for (int ix = 1; ix <= 10; ++ix) {
+      const std::string id = std::format("{:02d}", ix);
+      const std::filesystem::path in_path = root / ("sample_" + id + ".stdin.txt");
+      const std::filesystem::path out_path = root / ("sample_" + id + ".stdout.txt");
+      const std::filesystem::path err_path = root / ("sample_" + id + ".stderr.txt");
 
       ASSERT_TRUE(std::filesystem::exists(in_path)) << "missing input " << in_path.string();
       ASSERT_TRUE(std::filesystem::exists(out_path)) << "missing golden " << out_path.string();
@@ -107,11 +109,11 @@ namespace matching {
       std::string got_stderr;
       run_matching_engine_on_input(input, got_stdout, got_stderr);
 
-      EXPECT_EQ(got_stdout, expected_stdout) << "stdout mismatch for scenario " << ix;
+      EXPECT_EQ(got_stdout, expected_stdout) << "stdout mismatch for scenario sample_" << id;
       if (has_stderr_golden) {
-        EXPECT_EQ(got_stderr, expected_stderr) << "stderr mismatch for scenario " << ix;
+        EXPECT_EQ(got_stderr, expected_stderr) << "stderr mismatch for scenario sample_" << id;
       } else {
-        EXPECT_TRUE(got_stderr.empty()) << "unexpected stderr for scenario " << ix << ":\n" << got_stderr;
+        EXPECT_TRUE(got_stderr.empty()) << "unexpected stderr for scenario sample_" << id << ":\n" << got_stderr;
       }
     }
   }

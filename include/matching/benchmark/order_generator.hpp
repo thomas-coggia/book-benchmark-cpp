@@ -65,7 +65,7 @@ namespace matching::benchmark {
       last_add_side_ = side;
       has_last_add_side_ = true;
       live_.push_back(live_resting_t{id, side, price});
-      return add_order_event_t{id, side, quantity, price};
+      return add_order_event_t{id, side, quantity, price, tif_t::gtc};
     }
 
     /// Resting orders tracked locally for cancel sampling (filled-away ids may remain unknown here).

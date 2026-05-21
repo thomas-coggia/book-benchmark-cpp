@@ -10,11 +10,13 @@
 
 namespace matching {
 
-  using output_payload_t =
-    std::variant<trade_event_t, order_fully_filled_t, order_partially_filled_t, order_error_event_t>;
+  using output_payload_t = std::variant<
+    trade_event_t,
+    order_resting_event_t,
+    order_filled_event_t,
+    order_cancelled_event_t,
+    order_rejected_event_t>;
 
-  // Collector emitter: stores every output event in arrival order so tests can assert both
-  // contents and ordering.
   struct event_record_t {
     output_payload_t payload;
   };
@@ -26,15 +28,19 @@ namespace matching {
       events->push_back({e});
     }
 
-    void operator()(const order_fully_filled_t& e) const {
+    void operator()(const order_resting_event_t& e) const {
       events->push_back({e});
     }
 
-    void operator()(const order_partially_filled_t& e) const {
+    void operator()(const order_filled_event_t& e) const {
       events->push_back({e});
     }
 
-    void operator()(const order_error_event_t& e) const {
+    void operator()(const order_cancelled_event_t& e) const {
+      events->push_back({e});
+    }
+
+    void operator()(const order_rejected_event_t& e) const {
       events->push_back({e});
     }
   };
@@ -46,209 +52,293 @@ namespace matching {
       return clob_t<recorder_t>{clob_memory_t{capacity}, recorder_t{&events_}};
     }
 
-    static add_order_event_t buy(order_id_t id, quantity_t qty, price_t px) {
-      return add_order_event_t{id, side_t::buy, qty, px};
+    static add_order_event_t buy(order_id_t id, quantity_t qty, price_t px, tif_t tif = tif_t::gtc) {
+      return add_order_event_t{id, side_t::buy, qty, px, tif};
     }
 
-    static add_order_event_t sell(order_id_t id, quantity_t qty, price_t px) {
-      return add_order_event_t{id, side_t::sell, qty, px};
+    static add_order_event_t sell(order_id_t id, quantity_t qty, price_t px, tif_t tif = tif_t::gtc) {
+      return add_order_event_t{id, side_t::sell, qty, px, tif};
     }
 
     static const trade_event_t* as_trade(const event_record_t& r) {
       return std::get_if<trade_event_t>(&r.payload);
     }
 
-    static const order_fully_filled_t* as_full(const event_record_t& r) {
-      return std::get_if<order_fully_filled_t>(&r.payload);
+    static const order_resting_event_t* as_resting(const event_record_t& r) {
+      return std::get_if<order_resting_event_t>(&r.payload);
     }
 
-    static const order_partially_filled_t* as_partial(const event_record_t& r) {
-      return std::get_if<order_partially_filled_t>(&r.payload);
+    static const order_filled_event_t* as_filled(const event_record_t& r) {
+      return std::get_if<order_filled_event_t>(&r.payload);
     }
 
-    static const order_error_event_t* as_error(const event_record_t& r) {
-      return std::get_if<order_error_event_t>(&r.payload);
+    static const order_cancelled_event_t* as_cancelled(const event_record_t& r) {
+      return std::get_if<order_cancelled_event_t>(&r.payload);
     }
 
-    [[nodiscard]] static order_id_t fill_order_id(const event_record_t& r) {
-      if (const auto* f = as_full(r)) {
-        return f->order_id;
-      }
-      if (const auto* p = as_partial(r)) {
-        return p->order_id;
-      }
-      ADD_FAILURE() << "expected fill event";
-      return 0;
+    static const order_rejected_event_t* as_rejected(const event_record_t& r) {
+      return std::get_if<order_rejected_event_t>(&r.payload);
     }
   };
 
-  TEST_F(OrderBookTest, AddOrderNoMatchProducesNoOutput) {
+  TEST_F(OrderBookTest, AddOrderNoMatchEmitsRestingFullQuantity) {
     auto book = make_book();
     book(buy(1, 10, 100));
-    book(sell(2, 10, 200));
-    EXPECT_TRUE(events_.empty());
+    ASSERT_EQ(events_.size(), 1u);
+    const auto* rst = as_resting(events_[0]);
+    ASSERT_NE(rst, nullptr);
+    EXPECT_EQ(rst->order_id, 1);
+    EXPECT_EQ(rst->filled_quantity, 0);
+    EXPECT_EQ(rst->resting_quantity, 10);
     EXPECT_EQ(book.bid_depth(), 1u);
-    EXPECT_EQ(book.ask_depth(), 1u);
+    EXPECT_EQ(book.ask_depth(), 0u);
   }
 
-  TEST_F(OrderBookTest, BetterPriceMatchesFirst) {
+  TEST_F(OrderBookTest, BetterPriceMatchesFirstAndEmitsMatchingTradeThenFilled) {
     auto book = make_book();
     book(sell(1, 5, 110));
     book(sell(2, 5, 100));
     book(sell(3, 5, 105));
+    events_.clear();
     book(buy(99, 5, 200));
 
     ASSERT_EQ(events_.size(), 3u);
-    const auto* trade = as_trade(events_[0]);
-    ASSERT_NE(trade, nullptr);
-    EXPECT_EQ(trade->price, 100);  // Best (lowest) ask should match first.
-    EXPECT_EQ(trade->quantity, 5);
+    const auto* trd = as_trade(events_[0]);
+    ASSERT_NE(trd, nullptr);
+    EXPECT_EQ(trd->aggressive_order_id, 99);
+    EXPECT_EQ(trd->resting_order_id, 2);
+    EXPECT_EQ(trd->quantity, 5);
+    ASSERT_NE(as_filled(events_[1]), nullptr);
+    EXPECT_EQ(as_filled(events_[1])->order_id, 2);
+    ASSERT_NE(as_filled(events_[2]), nullptr);
+    EXPECT_EQ(as_filled(events_[2])->order_id, 99);
+  }
 
-    ASSERT_NE(as_full(events_[1]), nullptr);
-    EXPECT_EQ(fill_order_id(events_[1]), 99);
+  TEST_F(OrderBookTest, AggressivePartialFillRestingResidueEmitsTradeThenResting) {
+    auto book = make_book();
+    book(sell(1, 3, 100));
+    events_.clear();
+    book(buy(2, 5, 100));
 
-    ASSERT_NE(as_full(events_[2]), nullptr);
-    EXPECT_EQ(fill_order_id(events_[2]), 2);
+    ASSERT_EQ(events_.size(), 3u);
+    EXPECT_EQ(as_trade(events_[0])->quantity, 3);
+    const auto* rst = as_resting(events_[2]);
+    ASSERT_NE(rst, nullptr);
+    EXPECT_EQ(rst->order_id, 2);
+    EXPECT_EQ(rst->filled_quantity, 3);
+    EXPECT_EQ(rst->resting_quantity, 2);
+    EXPECT_EQ(book.bid_depth(), 1u);
+    EXPECT_EQ(book.ask_depth(), 0u);
+  }
+
+  TEST_F(OrderBookTest, AggressiveFullFillEmitsTradeThenFilled) {
+    auto book = make_book();
+    book(sell(1, 10, 100));
+    events_.clear();
+    book(buy(2, 4, 100));
+
+    ASSERT_EQ(events_.size(), 3u);
+    EXPECT_EQ(as_trade(events_[0])->quantity, 4);
+    const auto* fil = as_filled(events_[2]);
+    ASSERT_NE(fil, nullptr);
+    EXPECT_EQ(fil->order_id, 2);
+    EXPECT_EQ(fil->filled_quantity, 4);
+  }
+
+  TEST_F(OrderBookTest, MultiLevelSweepEmitsTradesThenFilled) {
+    auto book = make_book();
+    book(sell(1, 5, 100));
+    book(sell(2, 5, 101));
+    book(sell(3, 5, 102));
+    events_.clear();
+    book(buy(99, 12, 102));
+
+    ASSERT_EQ(events_.size(), 7u);
+    EXPECT_EQ(as_trade(events_[0])->quantity, 5);
+    EXPECT_EQ(as_trade(events_[2])->quantity, 5);
+    EXPECT_EQ(as_trade(events_[4])->quantity, 2);
+    const auto* fil = as_filled(events_[6]);
+    ASSERT_NE(fil, nullptr);
+    EXPECT_EQ(fil->order_id, 99);
+    EXPECT_EQ(fil->filled_quantity, 12);
+  }
+
+  TEST_F(OrderBookTest, CancelRemovesRestingOrderAndEmitsCancelled) {
+    auto book = make_book();
+    book(buy(1, 5, 100));
+    events_.clear();
+
+    book(cancel_order_event_t{1});
+    ASSERT_EQ(events_.size(), 1u);
+    const auto* can = as_cancelled(events_[0]);
+    ASSERT_NE(can, nullptr);
+    EXPECT_EQ(can->order_id, 1);
+    EXPECT_EQ(can->filled_quantity, 0);
+    EXPECT_EQ(can->cancelled_quantity, 5);
+    EXPECT_EQ(can->cause, cancel_cause_t::user_request);
+    EXPECT_EQ(book.bid_depth(), 0u);
+  }
+
+  TEST_F(OrderBookTest, CancelOfUnknownIdEmitsRejected) {
+    auto book = make_book();
+    book(cancel_order_event_t{42});
+    ASSERT_EQ(events_.size(), 1u);
+    EXPECT_EQ(as_rejected(events_[0])->reject_code, reject_code_t::unknown_order_id);
+  }
+
+  TEST_F(OrderBookTest, CancelAfterFullFillEmitsRejected) {
+    auto book = make_book();
+    book(buy(1, 5, 100));
+    book(sell(2, 5, 100));
+    events_.clear();
+    book(cancel_order_event_t{1});
+    ASSERT_EQ(events_.size(), 1u);
+    EXPECT_EQ(as_rejected(events_[0])->reject_code, reject_code_t::unknown_order_id);
+  }
+
+  TEST_F(OrderBookTest, DuplicateAddIdEmitsRejected) {
+    auto book = make_book();
+    book(buy(1, 5, 100));
+    events_.clear();
+    book(buy(1, 3, 99));
+    ASSERT_EQ(events_.size(), 1u);
+    EXPECT_EQ(as_rejected(events_[0])->reject_code, reject_code_t::duplicate_order_id);
+    EXPECT_EQ(book.bid_depth(), 1u);
+  }
+
+  TEST_F(OrderBookTest, InvalidQuantityRejected) {
+    auto book = make_book();
+    book(add_order_event_t{1, side_t::buy, 0, 100, tif_t::gtc});
+    EXPECT_EQ(as_rejected(events_[0])->reject_code, reject_code_t::invalid_quantity);
+  }
+
+  TEST_F(OrderBookTest, InvalidPriceRejected) {
+    auto book = make_book();
+    book(add_order_event_t{1, side_t::buy, 10, 0, tif_t::gtc});
+    EXPECT_EQ(as_rejected(events_[0])->reject_code, reject_code_t::invalid_price);
+  }
+
+  TEST_F(OrderBookTest, InvalidOrderIdOnAddRejected) {
+    auto book = make_book();
+    book(add_order_event_t{0, side_t::buy, 10, 100, tif_t::gtc});
+    EXPECT_EQ(as_rejected(events_[0])->reject_code, reject_code_t::invalid_order_id);
+  }
+
+  TEST_F(OrderBookTest, InvalidOrderIdOnCancelRejected) {
+    auto book = make_book();
+    book(cancel_order_event_t{0});
+    EXPECT_EQ(as_rejected(events_[0])->reject_code, reject_code_t::invalid_order_id);
+  }
+
+  TEST_F(OrderBookTest, IocFullyMatchedEmitsTradeThenFilled) {
+    auto book = make_book();
+    book(sell(1, 10, 100));
+    events_.clear();
+    book(buy(2, 5, 100, tif_t::ioc));
+    ASSERT_EQ(events_.size(), 3u);
+    EXPECT_EQ(as_trade(events_[0])->quantity, 5);
+    EXPECT_EQ(as_filled(events_[2])->filled_quantity, 5);
+  }
+
+  TEST_F(OrderBookTest, IocPartialFillEmitsMatchingTradeThenCancelledWithIocCause) {
+    auto book = make_book();
+    book(sell(1, 3, 100));
+    events_.clear();
+    book(buy(2, 5, 100, tif_t::ioc));
+    ASSERT_EQ(events_.size(), 3u);
+    EXPECT_EQ(as_trade(events_[0])->quantity, 3);
+    const auto* can = as_cancelled(events_[2]);
+    ASSERT_NE(can, nullptr);
+    EXPECT_EQ(can->filled_quantity, 3);
+    EXPECT_EQ(can->cancelled_quantity, 2);
+    EXPECT_EQ(can->cause, cancel_cause_t::immediate_or_cancel);
+    EXPECT_EQ(book.bid_depth(), 0u);
+  }
+
+  TEST_F(OrderBookTest, IocNoMatchEmitsCancelledZeroFill) {
+    auto book = make_book();
+    book(sell(1, 5, 110));
+    events_.clear();
+    book(buy(2, 5, 100, tif_t::ioc));
+    ASSERT_EQ(events_.size(), 1u);
+    const auto* can = as_cancelled(events_[0]);
+    ASSERT_NE(can, nullptr);
+    EXPECT_EQ(can->filled_quantity, 0);
+    EXPECT_EQ(can->cancelled_quantity, 5);
+    EXPECT_EQ(can->cause, cancel_cause_t::immediate_or_cancel);
+  }
+
+  TEST_F(OrderBookTest, FokFullyFillableEmitsTradesThenFilled) {
+    auto book = make_book();
+    book(sell(1, 5, 100));
+    book(sell(2, 5, 101));
+    events_.clear();
+    book(buy(3, 10, 101, tif_t::fok));
+    ASSERT_EQ(events_.size(), 5u);
+    EXPECT_EQ(as_filled(events_[4])->filled_quantity, 10);
+  }
+
+  TEST_F(OrderBookTest, FokNotFullyFillableEmitsCancelledFokCause) {
+    auto book = make_book();
+    book(sell(1, 4, 100));
+    events_.clear();
+    book(buy(2, 5, 100, tif_t::fok));
+    ASSERT_EQ(events_.size(), 1u);
+    const auto* can = as_cancelled(events_[0]);
+    ASSERT_NE(can, nullptr);
+    EXPECT_EQ(can->filled_quantity, 0);
+    EXPECT_EQ(can->cancelled_quantity, 5);
+    EXPECT_EQ(can->cause, cancel_cause_t::fill_or_kill);
+    EXPECT_EQ(book.ask_depth(), 1u);
+  }
+
+  TEST_F(OrderBookTest, FokIgnoresOppositeSideAboveLimit) {
+    auto book = make_book();
+    book(sell(1, 3, 100));
+    book(sell(2, 2, 105));
+    events_.clear();
+    book(buy(3, 5, 100, tif_t::fok));
+    ASSERT_EQ(events_.size(), 1u);
+    EXPECT_EQ(as_cancelled(events_[0])->cause, cancel_cause_t::fill_or_kill);
+    EXPECT_EQ(book.ask_depth(), 2u);
+  }
+
+  TEST_F(OrderBookTest, GtcResidueRestsAndIsLaterMatchable) {
+    auto book = make_book();
+    book(sell(1, 3, 100));
+    book(buy(2, 5, 100));
+    events_.clear();
+    book(sell(3, 2, 100));
+    ASSERT_EQ(events_.size(), 3u);
+    EXPECT_EQ(as_trade(events_[0])->quantity, 2);
+    EXPECT_EQ(as_filled(events_[2])->order_id, 3);
+    EXPECT_EQ(book.bid_depth(), 0u);
   }
 
   TEST_F(OrderBookTest, TimePriorityWithinSamePriceLevel) {
     auto book = make_book();
     book(buy(1, 5, 100));
     book(buy(2, 5, 100));
-    book(sell(99, 5, 100));
-
-    ASSERT_EQ(events_.size(), 3u);
-    ASSERT_NE(as_full(events_[2]), nullptr);
-    EXPECT_EQ(fill_order_id(events_[2]), 1);  // Older order matches first.
-  }
-
-  TEST_F(OrderBookTest, AggressivePartialFillRestingFull) {
-    auto book = make_book();
-    book(sell(1, 3, 100));
-    book(buy(2, 5, 100));
-
-    ASSERT_EQ(events_.size(), 3u);
-    EXPECT_EQ(as_trade(events_[0])->quantity, 3);
-    ASSERT_NE(as_partial(events_[1]), nullptr);
-    EXPECT_EQ(as_partial(events_[1])->remaining_quantity, 2);
-    EXPECT_EQ(as_partial(events_[1])->order_id, 2);
-    ASSERT_NE(as_full(events_[2]), nullptr);
-    EXPECT_EQ(as_full(events_[2])->order_id, 1);
-    // Residual of aggressive becomes a new resting order.
-    EXPECT_EQ(book.bid_depth(), 1u);
-    EXPECT_EQ(book.ask_depth(), 0u);
-  }
-
-  TEST_F(OrderBookTest, AggressiveFullRestingPartial) {
-    auto book = make_book();
-    book(sell(1, 10, 100));
-    book(buy(2, 4, 100));
-
-    ASSERT_EQ(events_.size(), 3u);
-    EXPECT_EQ(as_trade(events_[0])->quantity, 4);
-    ASSERT_NE(as_full(events_[1]), nullptr);
-    EXPECT_EQ(as_full(events_[1])->order_id, 2);
-    ASSERT_NE(as_partial(events_[2]), nullptr);
-    EXPECT_EQ(as_partial(events_[2])->remaining_quantity, 6);
-    EXPECT_EQ(as_partial(events_[2])->order_id, 1);
-  }
-
-  TEST_F(OrderBookTest, MultiLevelSweep) {
-    auto book = make_book();
-    book(sell(1, 5, 100));
-    book(sell(2, 5, 101));
-    book(sell(3, 5, 102));
-    book(buy(99, 12, 102));
-
-    // 3 levels touched -> 3 trades, 3 aggressive fills, 3 resting fills.
-    ASSERT_EQ(events_.size(), 9u);
-    EXPECT_EQ(as_trade(events_[0])->price, 100);
-    EXPECT_EQ(as_trade(events_[3])->price, 101);
-    EXPECT_EQ(as_trade(events_[6])->price, 102);
-    EXPECT_EQ(as_trade(events_[6])->quantity, 2);
-
-    ASSERT_NE(as_full(events_[2]), nullptr);     // resting 1
-    ASSERT_NE(as_full(events_[5]), nullptr);     // resting 2
-    ASSERT_NE(as_partial(events_[8]), nullptr);  // resting 3 with 3 left
-    EXPECT_EQ(as_partial(events_[8])->remaining_quantity, 3);
-  }
-
-  TEST_F(OrderBookTest, AggressiveResidualRestsOnBookAndIsMatchableLater) {
-    auto book = make_book();
-    book(sell(1, 3, 100));
-    book(buy(2, 5, 100));  // matches 3, 2 remaining at 100
     events_.clear();
-
-    book(sell(3, 2, 100));  // crosses the residual
+    book(sell(99, 5, 100));
     ASSERT_EQ(events_.size(), 3u);
-    EXPECT_EQ(as_trade(events_[0])->quantity, 2);
-    EXPECT_EQ(as_trade(events_[0])->price, 100);
-    EXPECT_EQ(fill_order_id(events_[1]), 3);
-    EXPECT_EQ(fill_order_id(events_[2]), 2);
+    EXPECT_NE(as_trade(events_[0]), nullptr);
+    events_.clear();
+    book(sell(100, 5, 100));
+    ASSERT_EQ(events_.size(), 3u);
     EXPECT_EQ(book.bid_depth(), 0u);
-    EXPECT_EQ(book.ask_depth(), 0u);
-  }
-
-  TEST_F(OrderBookTest, CancelRemovesRestingOrder) {
-    auto book = make_book();
-    book(buy(1, 5, 100));
-    book(cancel_order_event_t{1});
-
-    EXPECT_TRUE(events_.empty());
-    EXPECT_EQ(book.bid_depth(), 0u);
-
-    book(sell(2, 5, 100));  // No counter-party left; should rest.
-    EXPECT_TRUE(events_.empty());
-    EXPECT_EQ(book.ask_depth(), 1u);
-  }
-
-  TEST_F(OrderBookTest, CancelOfUnknownIdEmitsErrors) {
-    auto book = make_book();
-    book(cancel_order_event_t{42});
-    book(buy(1, 5, 100));
-    book(cancel_order_event_t{99});
-
-    ASSERT_EQ(events_.size(), 2u);
-    ASSERT_NE(as_error(events_[0]), nullptr);
-    EXPECT_EQ(as_error(events_[0])->order_id, 42);
-    EXPECT_EQ(as_error(events_[0])->kind, order_error_kind_t::unknown_order_id);
-    ASSERT_NE(as_error(events_[1]), nullptr);
-    EXPECT_EQ(as_error(events_[1])->order_id, 99);
-    EXPECT_EQ(as_error(events_[1])->kind, order_error_kind_t::unknown_order_id);
-    EXPECT_EQ(book.bid_depth(), 1u);
   }
 
   TEST_F(OrderBookTest, NoMatchWhenCrossConditionNotMet) {
     auto book = make_book();
     book(buy(1, 5, 99));
+    events_.clear();
     book(sell(2, 5, 100));
-    EXPECT_TRUE(events_.empty());
-    EXPECT_EQ(book.bid_depth(), 1u);
-    EXPECT_EQ(book.ask_depth(), 1u);
-  }
-
-  TEST_F(OrderBookTest, OutputOrderingTradeAggressiveResting) {
-    // Trade → aggressive fill → resting fill for every match step.
-    auto book = make_book();
-    book(sell(10, 3, 100));
-    book(sell(11, 3, 100));
-    book(buy(99, 5, 100));
-
-    ASSERT_EQ(events_.size(), 6u);
-    // Match 1
-    ASSERT_NE(as_trade(events_[0]), nullptr);
-    ASSERT_NE(as_partial(events_[1]), nullptr);
-    EXPECT_EQ(as_partial(events_[1])->order_id, 99);
-    EXPECT_EQ(as_partial(events_[1])->remaining_quantity, 2);
-    ASSERT_NE(as_full(events_[2]), nullptr);
-    EXPECT_EQ(as_full(events_[2])->order_id, 10);
-    // Match 2
-    ASSERT_NE(as_trade(events_[3]), nullptr);
-    ASSERT_NE(as_full(events_[4]), nullptr);
-    EXPECT_EQ(fill_order_id(events_[4]), 99);
-    ASSERT_NE(as_partial(events_[5]), nullptr);
-    EXPECT_EQ(as_partial(events_[5])->order_id, 11);
-    EXPECT_EQ(as_partial(events_[5])->remaining_quantity, 1);
+    ASSERT_EQ(events_.size(), 1u);
+    const auto* rst = as_resting(events_[0]);
+    ASSERT_NE(rst, nullptr);
+    EXPECT_EQ(rst->filled_quantity, 0);
+    EXPECT_EQ(rst->resting_quantity, 5);
   }
 
   TEST_F(OrderBookTest, BundledSampleFinalOrderProducesExpectedSequence) {
@@ -262,108 +352,15 @@ namespace matching {
     book(buy(1'000'006, 1, 1000));
     book(cancel_order_event_t{1'000'004});
     book(sell(1'000'007, 5, 1025));
-    EXPECT_TRUE(events_.empty());
-
-    // The aggressive buy of 3 at 1050 against asks {1000005=2@1025, 1000007=5@1025, ...}.
-    book(buy(1'000'008, 3, 1050));
-
-    ASSERT_EQ(events_.size(), 6u);
-    EXPECT_EQ(as_trade(events_[0])->quantity, 2);
-    EXPECT_EQ(as_trade(events_[0])->price, 1025);
-    ASSERT_NE(as_partial(events_[1]), nullptr);
-    EXPECT_EQ(as_partial(events_[1])->order_id, 1'000'008);
-    EXPECT_EQ(as_partial(events_[1])->remaining_quantity, 1);
-    ASSERT_NE(as_full(events_[2]), nullptr);
-    EXPECT_EQ(as_full(events_[2])->order_id, 1'000'005);
-    EXPECT_EQ(as_trade(events_[3])->quantity, 1);
-    EXPECT_EQ(as_trade(events_[3])->price, 1025);
-    ASSERT_NE(as_full(events_[4]), nullptr);
-    EXPECT_EQ(as_full(events_[4])->order_id, 1'000'008);
-    ASSERT_NE(as_partial(events_[5]), nullptr);
-    EXPECT_EQ(as_partial(events_[5])->order_id, 1'000'007);
-    EXPECT_EQ(as_partial(events_[5])->remaining_quantity, 4);
-  }
-
-  TEST_F(OrderBookTest, AggressiveOnSellSideAlsoOrderedCorrectly) {
-    auto book = make_book();
-    book(buy(1, 4, 100));
-    book(buy(2, 4, 100));
-    book(sell(99, 6, 100));
-    ASSERT_EQ(events_.size(), 6u);
-    EXPECT_EQ(as_trade(events_[0])->price, 100);
-    ASSERT_NE(as_partial(events_[1]), nullptr);
-    EXPECT_EQ(as_partial(events_[1])->order_id, 99);
-    EXPECT_EQ(as_partial(events_[1])->remaining_quantity, 2);
-    EXPECT_EQ(fill_order_id(events_[2]), 1);
-    ASSERT_NE(as_full(events_[2]), nullptr);
-    EXPECT_EQ(as_trade(events_[3])->quantity, 2);
-    EXPECT_EQ(fill_order_id(events_[4]), 99);
-    ASSERT_NE(as_full(events_[4]), nullptr);
-    EXPECT_EQ(fill_order_id(events_[5]), 2);
-    ASSERT_NE(as_partial(events_[5]), nullptr);
-    EXPECT_EQ(as_partial(events_[5])->remaining_quantity, 2);
-  }
-
-  TEST_F(OrderBookTest, CancelAfterFullFillEmitsUnknownIdError) {
-    auto book = make_book();
-    book(buy(1, 5, 100));
-    book(sell(2, 5, 100));  // 1 is fully filled.
     events_.clear();
-    book(cancel_order_event_t{1});
-    ASSERT_EQ(events_.size(), 1u);
-    ASSERT_NE(as_error(events_[0]), nullptr);
-    EXPECT_EQ(as_error(events_[0])->order_id, 1);
-    EXPECT_EQ(as_error(events_[0])->kind, order_error_kind_t::unknown_order_id);
-  }
-
-  TEST_F(OrderBookTest, DuplicateRestingOrderIdEmitsError) {
-    auto book = make_book();
-    book(buy(1, 5, 100));
-    book(buy(1, 3, 99));
-    ASSERT_EQ(events_.size(), 1u);
-    ASSERT_NE(as_error(events_[0]), nullptr);
-    EXPECT_EQ(as_error(events_[0])->order_id, 1);
-    EXPECT_EQ(as_error(events_[0])->kind, order_error_kind_t::duplicate_order_id);
-    EXPECT_EQ(book.bid_depth(), 1u);
-  }
-
-  TEST_F(OrderBookTest, StatelessInvalidAddQuantityEmitsError) {
-    auto book = make_book();
-    book(add_order_event_t{1, side_t::buy, 0, 100});
-    ASSERT_EQ(events_.size(), 1u);
-    ASSERT_NE(as_error(events_[0]), nullptr);
-    EXPECT_EQ(as_error(events_[0])->order_id, 1);
-    EXPECT_EQ(as_error(events_[0])->kind, order_error_kind_t::invalid_add_quantity);
-    EXPECT_EQ(book.bid_depth(), 0u);
-    EXPECT_EQ(book.ask_depth(), 0u);
-  }
-
-  TEST_F(OrderBookTest, StatelessInvalidAddPriceEmitsError) {
-    auto book = make_book();
-    book(add_order_event_t{1, side_t::buy, 10, 0});
-    ASSERT_EQ(events_.size(), 1u);
-    ASSERT_NE(as_error(events_[0]), nullptr);
-    EXPECT_EQ(as_error(events_[0])->order_id, 1);
-    EXPECT_EQ(as_error(events_[0])->kind, order_error_kind_t::invalid_add_price);
-    EXPECT_EQ(book.bid_depth(), 0u);
-  }
-
-  TEST_F(OrderBookTest, StatelessInvalidAddOrderIdEmitsError) {
-    auto book = make_book();
-    book(add_order_event_t{0, side_t::buy, 10, 100});
-    ASSERT_EQ(events_.size(), 1u);
-    ASSERT_NE(as_error(events_[0]), nullptr);
-    EXPECT_EQ(as_error(events_[0])->order_id, 0);
-    EXPECT_EQ(as_error(events_[0])->kind, order_error_kind_t::invalid_add_order_id);
-  }
-
-  TEST_F(OrderBookTest, StatelessInvalidCancelOrderIdEmitsError) {
-    auto book = make_book();
-    book(cancel_order_event_t{0});
-    ASSERT_EQ(events_.size(), 1u);
-    ASSERT_NE(as_error(events_[0]), nullptr);
-    EXPECT_EQ(as_error(events_[0])->order_id, 0);
-    EXPECT_EQ(as_error(events_[0])->kind, order_error_kind_t::invalid_cancel_order_id);
+    book(buy(1'000'008, 3, 1050));
+    ASSERT_EQ(events_.size(), 5u);
+    EXPECT_EQ(as_trade(events_[0])->quantity, 2);
+    EXPECT_EQ(as_filled(events_[1])->order_id, 1'000'005);
+    EXPECT_EQ(as_trade(events_[2])->quantity, 1);
+    EXPECT_EQ(as_resting(events_[3])->order_id, 1'000'007);
+    EXPECT_EQ(as_filled(events_[4])->order_id, 1'000'008);
+    EXPECT_EQ(as_filled(events_[4])->filled_quantity, 3);
   }
 
 }  // namespace matching

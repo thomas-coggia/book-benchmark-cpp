@@ -52,11 +52,11 @@ The **matching_engine** binary runs a **three-agent pipeline**: a reader pulls t
 
 ```
 Text line
-    → input_parser (bounded buffer)
+    → input_parser (bounded buffer; format-only validation)
     → input_event_t variant
     → input SPSC queue
     → clob_t<Emitter> (match / cancel / rest)
-    → output_event_t variant (trades, fills, …)
+    → output_event_t variant (trades, terminal order rows, …)
     → output SPSC queue
     → output_formatter
     → text line on stdout
@@ -66,10 +66,16 @@ Text line
 
 ```cpp
 input_event_t  = variant<add_order_event_t, cancel_order_event_t, shutdown_t>;
-output_event_t = variant<trade_event_t, order_fully_filled_t, order_partially_filled_t, shutdown_t>;
+output_event_t = variant<
+    trade_event_t,
+    order_resting_event_t,
+    order_filled_event_t,
+    order_cancelled_event_t,
+    order_rejected_event_t,
+    shutdown_t>;
 ```
 
-`shutdown_t` is **in-band** for the pipeline only; it never appears on the wire. The production **Emitter** pushes `output_event_t` to the writer queue; the **benchmark** path swaps in an emitter that only counts trades.
+Each matcher-visible input yields @ref trade_event_t rows for each bilateral fill step, plus exactly one terminal alternative for the input order. Resting orders touched during someone else's match may also emit @c RST or @c FIL before the aggressive terminal. `shutdown_t` is **in-band** for the pipeline only; it never appears on the wire. The production **Emitter** pushes `output_event_t` to the writer queue; the **benchmark** path swaps in an emitter that counts trades.
 
 ---
 
@@ -82,8 +88,8 @@ output_event_t = variant<trade_event_t, order_fully_filled_t, order_partially_fi
 
 2. **Matcher (consumer + producer)**  
    - Pops `input_event_t` from the input SPSC.  
-   - Runs `clob_t` logic: resting orders, cancel-by-id, matching with **price then time**.  
-   - Emits **`trade_event_t` first**, then aggressive fill, then resting fill (`order_fully_filled_t` / `order_partially_filled_t`) in that order (see wire format in README).  
+   - Runs `clob_t` logic: resting orders, cancel-by-id, matching with **price then time**, with explicit **time-in-force** (`GTC` / `IOC` / `FOK`) per add.  
+   - Emits @ref trade_event_t per bilateral fill, resting @c RST / @c FIL when a passive order is updated, then one terminal row for the aggressive add (@c RST / @c FIL / @c CAN / @c REJ).  
    - Forwards `shutdown_t` to the output side when appropriate.
 
 3. **Writer (consumer from output queue)**  
@@ -209,4 +215,4 @@ CPU affinity is optional (CLI pins); benchmark uses the same idea for apples-to-
 
 ## Wire format
 
-Same as [`README.md`](README.md). Messages use **three-letter tags** (e.g. `ADD`/`CXL` in, `TRD`/`FFL`/`PFL`/`ERR` out); the **side** field on adds is **`BUY`** or **`SLL`**; other numeric fields remain integers; comments and blank lines are skipped on input.
+Same as [`README.md`](README.md). Messages use **three-letter tags** (`ADD`/`CXL` in, `TRD`/`RST`/`FIL`/`CAN`/`REJ` out); the **side** field on adds is **`BUY`** or **`SLL`**; **time-in-force** is **`GTC`**, **`IOC`**, or **`FOK`**; cancel cause and reject code are 3-letter strings; other numeric fields remain integers; comments and blank lines are skipped on input.

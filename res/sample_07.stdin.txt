@@ -1,0 +1,7 @@
+# FOK kill, FOK fully fillable, duplicate-id and unknown-id rejections.
+ADD,10,BUY,5,100,GTC
+ADD,11,BUY,5,99,GTC
+ADD,20,SLL,8,99,FOK
+ADD,21,SLL,15,99,FOK
+ADD,11,BUY,1,100,GTC
+CXL,99999

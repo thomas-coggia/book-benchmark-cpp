@@ -1,6 +1,23 @@
 #pragma once
 
+#include <cstdlib>
 #include <filesystem>
 
-/// Directory @c res/ under the repo root — path injected by CMake (`MATCHING_REPO_ROOT`).
-inline const std::filesystem::path matching_test_res_dir{"@MATCHING_REPO_ROOT@/res"};
+namespace matching_test_res_detail {
+
+  /// Build-time default — repo @c res/ folder, injected by CMake (`MATCHING_REPO_ROOT`).
+  inline constexpr const char* default_dir = "@MATCHING_REPO_ROOT@/res";
+
+  /// Runtime override via @c MATCHING_TEST_RES_DIR (used by the installed test layout under
+  /// @c share/matching/test/ so the same binary runs both in-tree and from the package). The
+  /// build-time default keeps in-tree dev iteration zero-config.
+  [[nodiscard]] inline std::filesystem::path resolve() {
+    if (const char* env = std::getenv("MATCHING_TEST_RES_DIR"); env != nullptr && env[0] != '\0') {
+      return std::filesystem::path{env};
+    }
+    return std::filesystem::path{default_dir};
+  }
+
+}  // namespace matching_test_res_detail
+
+inline const std::filesystem::path matching_test_res_dir{matching_test_res_detail::resolve()};

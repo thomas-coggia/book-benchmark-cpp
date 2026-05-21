@@ -22,10 +22,10 @@ namespace matching {
     }
   };
 
-  TEST(ParserTest, ParsesValidAddOrder) {
+  TEST(ParserTest, ParsesValidAddOrderGtc) {
     captured_err_t err;
     input_event_t evt{};
-    const auto status = parse_line("ADD,42,SLL,7,1234", evt, err.sink());
+    const auto status = parse_line("ADD,42,SLL,7,1234,GTC", evt, err.sink());
     ASSERT_EQ(status, parse_status_t::ok);
     ASSERT_TRUE(std::holds_alternative<add_order_event_t>(evt));
     const auto& add = std::get<add_order_event_t>(evt);
@@ -33,7 +33,22 @@ namespace matching {
     EXPECT_EQ(add.side, side_t::sell);
     EXPECT_EQ(add.quantity, 7);
     EXPECT_EQ(add.price, 1234);
+    EXPECT_EQ(add.tif, tif_t::gtc);
     EXPECT_TRUE(err.contents().empty());
+  }
+
+  TEST(ParserTest, ParsesValidAddOrderIoc) {
+    captured_err_t err;
+    input_event_t evt{};
+    ASSERT_EQ(parse_line("ADD,1,BUY,5,100,IOC", evt, err.sink()), parse_status_t::ok);
+    EXPECT_EQ(std::get<add_order_event_t>(evt).tif, tif_t::ioc);
+  }
+
+  TEST(ParserTest, ParsesValidAddOrderFok) {
+    captured_err_t err;
+    input_event_t evt{};
+    ASSERT_EQ(parse_line("ADD,1,BUY,5,100,FOK", evt, err.sink()), parse_status_t::ok);
+    EXPECT_EQ(std::get<add_order_event_t>(evt).tif, tif_t::fok);
   }
 
   TEST(ParserTest, ParsesValidCancelOrder) {
@@ -65,14 +80,13 @@ namespace matching {
     captured_err_t err;
     input_event_t evt{};
     EXPECT_EQ(parse_line("NOT_A_RECORD", evt, err.sink()), parse_status_t::error);
-    const std::string captured = err.contents();
-    EXPECT_NE(captured.find("Unknown message type: NOT_A_RECORD"), std::string::npos);
+    EXPECT_NE(err.contents().find("Unknown message type: NOT_A_RECORD"), std::string::npos);
   }
 
   TEST(ParserTest, UnknownOpcodeReportsError) {
     captured_err_t err;
     input_event_t evt{};
-    EXPECT_EQ(parse_line("ZZZ,1,BUY,2,3,4", evt, err.sink()), parse_status_t::error);
+    EXPECT_EQ(parse_line("ZZZ,1,BUY,2,3,GTC", evt, err.sink()), parse_status_t::error);
     EXPECT_NE(err.contents().find("Unknown message type: ZZZ"), std::string::npos);
   }
 
@@ -83,32 +97,41 @@ namespace matching {
     EXPECT_NE(err.contents().find("Ill-formed AddOrderRequest"), std::string::npos);
   }
 
+  TEST(ParserTest, MissingTifInAddReportsError) {
+    captured_err_t err;
+    input_event_t evt{};
+    EXPECT_EQ(parse_line("ADD,1,BUY,5,100", evt, err.sink()), parse_status_t::error);
+    EXPECT_NE(err.contents().find("Ill-formed AddOrderRequest"), std::string::npos);
+  }
+
   TEST(ParserTest, NonNumericFieldInAddReportsError) {
     captured_err_t err;
     input_event_t evt{};
-    EXPECT_EQ(parse_line("ADD,abc,BUY,5,100", evt, err.sink()), parse_status_t::error);
+    EXPECT_EQ(parse_line("ADD,abc,BUY,5,100,GTC", evt, err.sink()), parse_status_t::error);
     EXPECT_NE(err.contents().find("Ill-formed AddOrderRequest"), std::string::npos);
   }
 
   TEST(ParserTest, InvalidSideTokenReportsError) {
     captured_err_t err;
     input_event_t evt{};
-    EXPECT_EQ(parse_line("ADD,1,H,5,100", evt, err.sink()), parse_status_t::error);
+    EXPECT_EQ(parse_line("ADD,1,H,5,100,GTC", evt, err.sink()), parse_status_t::error);
     EXPECT_NE(err.contents().find("Invalid side token"), std::string::npos);
   }
 
-  TEST(ParserTest, NonPositiveQuantityReportsError) {
+  TEST(ParserTest, InvalidTifTokenReportsError) {
     captured_err_t err;
     input_event_t evt{};
-    EXPECT_EQ(parse_line("ADD,1,BUY,0,100", evt, err.sink()), parse_status_t::error);
-    EXPECT_NE(err.contents().find("Non-positive"), std::string::npos);
+    EXPECT_EQ(parse_line("ADD,1,BUY,5,100,XYZ", evt, err.sink()), parse_status_t::error);
+    EXPECT_NE(err.contents().find("Invalid time-in-force token"), std::string::npos);
   }
 
-  TEST(ParserTest, NonPositivePriceReportsError) {
+  TEST(ParserTest, ParserAcceptsNonPositiveFieldsAndDefersToEngine) {
+    // Semantic value-bound rejection moved from parser stderr to engine REJ output.
     captured_err_t err;
     input_event_t evt{};
-    EXPECT_EQ(parse_line("ADD,1,BUY,1,0", evt, err.sink()), parse_status_t::error);
-    EXPECT_NE(err.contents().find("Non-positive"), std::string::npos);
+    EXPECT_EQ(parse_line("ADD,1,BUY,0,100,GTC", evt, err.sink()), parse_status_t::ok);
+    EXPECT_TRUE(err.contents().empty());
+    EXPECT_EQ(std::get<add_order_event_t>(evt).quantity, 0);
   }
 
   TEST(ParserTest, IllFormedCancelReportsError) {
@@ -121,7 +144,7 @@ namespace matching {
   TEST(ParserTest, ParseStreamRoutesEventsAndPreservesOrder) {
     captured_err_t err;
     const std::string in_str =
-      "ADD,1,BUY,5,100\n"
+      "ADD,1,BUY,5,100,GTC\n"
       "NOT_A_RECORD\n"
       "CXL,1\n"
       "# trailing comment\n";
@@ -139,12 +162,11 @@ namespace matching {
   TEST(ParserTest, RobustnessNoCrashOnGarbage) {
     captured_err_t err;
     input_event_t evt{};
-    // Garbage lines; none must crash.
     EXPECT_EQ(parse_line(",,,,,", evt, err.sink()), parse_status_t::error);
     EXPECT_EQ(parse_line("0", evt, err.sink()), parse_status_t::error);
     EXPECT_EQ(parse_line("ADD,1", evt, err.sink()), parse_status_t::error);
     EXPECT_EQ(parse_line("CXL,", evt, err.sink()), parse_status_t::error);
-    EXPECT_EQ(parse_line("ADD,1,BUY,2,3,extra", evt, err.sink()), parse_status_t::error);
+    EXPECT_EQ(parse_line("ADD,1,BUY,2,3,GTC,extra", evt, err.sink()), parse_status_t::error);
     SUCCEED();
   }
 

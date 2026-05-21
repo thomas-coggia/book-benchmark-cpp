@@ -21,6 +21,7 @@ set(MATCHING_TEST_FILES
   test_invariants.cpp
 )
 
+set(MATCHING_TEST_TARGETS "")
 foreach(test_file IN LISTS MATCHING_TEST_FILES)
   get_filename_component(test_name "${test_file}" NAME_WE)
   add_executable(${test_name} ${test_file})
@@ -32,9 +33,40 @@ foreach(test_file IN LISTS MATCHING_TEST_FILES)
   )
   target_compile_features(${test_name} PRIVATE cxx_std_23)
   gtest_discover_tests(${test_name})
+  list(APPEND MATCHING_TEST_TARGETS ${test_name})
 endforeach()
 
 target_include_directories(test_engine_pipeline PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+
+# Optionally install the test layout so the `test_package` Conan recipe can re-run the suite
+# against the produced package. Kept opt-in (default OFF) so production deployments don't ship
+# test binaries unless the workflow asks for them — Conan's `test_package` flow flips this on.
+option(MATCHING_INSTALL_TESTS "Install test binaries and CTest config alongside the package" OFF)
+if(MATCHING_INSTALL_TESTS)
+  include(GNUInstallDirs)
+  set(MATCHING_TEST_INSTALL_ROOT "${CMAKE_INSTALL_DATAROOTDIR}/matching/test")
+  install(TARGETS ${MATCHING_TEST_TARGETS}
+          RUNTIME DESTINATION "${MATCHING_TEST_INSTALL_ROOT}/bin")
+  install(DIRECTORY "${CMAKE_SOURCE_DIR}/res/"
+          DESTINATION "${MATCHING_TEST_INSTALL_ROOT}/res")
+  # Hand-written CTestTestfile.cmake: lets ctest --test-dir <install>/share/matching/test/
+  # drive the installed binaries directly. We resolve paths relative to the file's own
+  # location so the layout stays relocatable across cache moves.
+  set(MATCHING_CTEST_FILE "${CMAKE_CURRENT_BINARY_DIR}/installed_CTestTestfile.cmake")
+  file(WRITE "${MATCHING_CTEST_FILE}"
+       "# Generated CTest harness for the installed matching test layout.\n"
+       "get_filename_component(MATCHING_TEST_ROOT \"\${CMAKE_CURRENT_LIST_DIR}\" ABSOLUTE)\n"
+  )
+  foreach(test_target IN LISTS MATCHING_TEST_TARGETS)
+    file(APPEND "${MATCHING_CTEST_FILE}"
+         "add_test(NAME ${test_target} COMMAND \"\${MATCHING_TEST_ROOT}/bin/${test_target}\")\n"
+         "set_tests_properties(${test_target} PROPERTIES ENVIRONMENT \"MATCHING_TEST_RES_DIR=\${MATCHING_TEST_ROOT}/res\")\n"
+    )
+  endforeach()
+  install(FILES "${MATCHING_CTEST_FILE}"
+          DESTINATION "${MATCHING_TEST_INSTALL_ROOT}"
+          RENAME "CTestTestfile.cmake")
+endif()
 
 # Fuzzer target: opt-in via -DBUILD_FUZZERS=ON. Requires a clang toolchain with libFuzzer
 # (-fsanitize=fuzzer). Not part of ctest — run manually with a corpus / time budget.

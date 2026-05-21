@@ -1,0 +1,5 @@
+# IOC: full fill, partial fill (residue cancelled), no fill at all.
+ADD,1,BUY,5,100,GTC
+ADD,2,SLL,3,100,IOC
+ADD,3,SLL,5,100,IOC
+ADD,4,SLL,10,100,IOC
