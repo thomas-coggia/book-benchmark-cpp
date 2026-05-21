@@ -38,9 +38,7 @@ docker run -it --rm \
 conan create . -pr:a=profiles/clang-19-release --build=missing
 ```
 
-`conan create` runs the full lifecycle (configure → build → test → package) and lands the resulting `matching/0.1.0` package in the Conan cache. `--build=missing` lets Conan compile any dependency (e.g. `gtest`) Conan Center hasn't prebuilt for our clang-19 / libstdc++11 / C++23 combo. After the first run the cache is populated and subsequent builds skip straight to our code.
-
-Other profiles in `profiles/`: `clang-19-debug`, `clang-19-asan`, `clang-19-ubsan`, `clang-19-tsan`.
+`conan create` runs the full lifecycle (configure → build → test → package).
 
 ### 4. Deploy into the workspace
 
@@ -48,8 +46,6 @@ Other profiles in `profiles/`: `clang-19-debug`, `clang-19-asan`, `clang-19-ubsa
 conan install --requires=matching/0.1.0 -pr:a=profiles/clang-19-release \
               --deployer=direct_deploy --output-folder=install
 ```
-
-Conan's `direct_deploy` extracts the package into `install/direct_deploy/matching/{bin,include,lib}` — a clean, FHS-shaped tree with no per-variant paths in the way.
 
 ### 5. Run the engine on a recorded sample
 
@@ -162,45 +158,37 @@ Three-letter message tags, comma-separated fields, exactly one output line per m
 
 ---
 
-## Build details
+## Development
 
-**Dev iteration.** Skip `conan create` while iterating — `conan build` configures and builds in place without going through the full package lifecycle; run `ctest` separately to exercise the suite:
+Day-to-day work skips the full package lifecycle from Quick start §3. Use `conan build` to configure and compile in the tree, then test and rebuild from CMake presets.
+
+### 1. Configure and build
 
 ```bash
 conan build . -pr:a=profiles/clang-19-release --build=missing
+```
+
+### 2. Test
+
+```bash
 ctest --preset conan-release
 ./build/clang-19-release/bin/matching_engine < res/sample_01.stdin.txt
 ```
 
-`CMakeToolchain` writes `CMakeUserPresets.json` at the repo root; CMake discovers it natively, so after any `conan build` you can rebuild incrementally without re-running Conan:
+### 3. Incremental rebuild
 
-
-| Profile            | CMake preset name   |
-| ------------------ | ------------------- |
-| `clang-19-release` | `conan-release`     |
-| `clang-19-debug`   | `conan-debug`       |
-| `clang-19-asan`    | `conan-asan-debug`  |
-| `clang-19-ubsan`   | `conan-ubsan-debug` |
-| `clang-19-tsan`    | `conan-tsan-debug`  |
-
+After the first `conan build`, rebuild without re-running Conan:
 
 ```bash
 cmake --build --preset conan-release
 ctest --preset conan-release
 ```
 
-**Sanitisers.** Flags live in each profile's `[conf] tools.build:cxxflags+=[...]`, so Conan rebuilds `gtest` instrumented too — reports rooted in `gtest` internals are real, not false positives. TSan example with runtime options (also pass `--security-opt seccomp=unconfined` to `docker run`):
-
-```bash
-TSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --preset conan-tsan-debug
-```
-
-**Fuzzer (optional).** `cmake -B build/fuzz -DBUILD_FUZZERS=ON` with a fuzz-capable toolchain; target `fuzz_input_parser` (see `test/fuzz_input_parser.cpp`).
-
 ---
 
 ## Repo notes
 
-- **C++23**, Linux-oriented. **Conan 2** supplies **cxxopts** (CLI for `matching_engine` / `benchmark`) and **GoogleTest** (tests only). Library TUs stay third-party-free. `conan create .` packages the project; `conan install --deployer=direct_deploy` extracts it into a clean `install/direct_deploy/matching/` tree. `conan build .` is the fast dev-iteration entry point. One profile per variant under `profiles/` (`clang-19-release`, `clang-19-debug`, `clang-19-{asan,ubsan,tsan}`); sanitisers live in profile `[conf]` and propagate to all dependencies. `CMakeToolchain` writes `CMakeUserPresets.json` for native `cmake --preset conan-…` rebuilds.
+- **Docker** for a consistent Linux build and benchmark environment on any host.
+- **C++23**, Linux-oriented. **Conan 2** handles dependencies and the build lifecycle; **`profiles/`** for consistent, reproducible builds across environments.
 - Mostly **header-only**; the extra translation unit is `src/signal_handler.cpp` (global stop source for signals).
 
