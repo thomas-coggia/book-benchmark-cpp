@@ -4,7 +4,7 @@ Single-symbol central limit order book with **GTC, IOC, and FOK** time-in-force:
 
 This repo presents a **clear, shareable reference** where **design**, **correctness**, and **maintainable code quality** come first. The matching core is a **reasonable, STL-based** engine. It shows how far **software design** can take you on standard library building blocks, before diving into algorithmic optimizations. Venue-specific know-how is not published here.
 
-On a **consumer-grade laptop**, the matcher sustains **~6M orders/second** at **~100 ns p50** latency across **five synthetic market regimes** (calm, active, quote-heavy, volatile, sweep). That is a fair baseline for an **STL-only** implementation, and the **consistency across regimes** matters as much as the headline number. Full data in `[benchmark.txt](benchmark.txt)`.
+On a **consumer-grade laptop**, the matcher sustains **~6M orders/second** at **~100 ns p50** latency across **five synthetic market regimes** (calm, active, quote-heavy, volatile, sweep). That is a fair baseline for an **STL-only** implementation, and the **consistency across regimes** matters as much as the headline number. Full data in [`benchmark.txt`](benchmark.txt).
 
 For diagrams, data structures, and complexity notes, see [ARCHITECTURE.md](ARCHITECTURE.md). For what each benchmark preset represents, see [BENCHMARK.md](BENCHMARK.md).
 
@@ -80,7 +80,7 @@ chrt 99 ./install/direct_deploy/matching/bin/benchmark --orders 1000000 --iterat
 
 ## Test System Configuration
 
-Benchmark numbers (for example in `[benchmark.txt](benchmark.txt)`) were captured on a **consumer-grade laptop**; the setup below matches that machine so you can compare your own hardware to the quoted runs.
+Benchmark numbers (for example in [`benchmark.txt`](benchmark.txt)) were captured on a **consumer-grade laptop**; the setup below matches that machine so you can compare your own hardware to the quoted runs.
 
 **Hardware:**
 
