@@ -30,26 +30,30 @@ docker run -it --rm \
 
 `SYS_NICE`/`rtprio` let the benchmark pin and elevate threads; `--user` keeps `build/` host-owned.
 
-### 3. Build
+### 3. Build & package
 
 ```bash
-conan build . -pr:a=profiles/clang-19-release --build=missing
+conan create . -pr:a=profiles/clang-19-release --build=missing
 ```
 
-`--build=missing` lets Conan compile any dependency (e.g. `gtest`) for which Conan Center has no prebuilt binary in our clang-19 / libstdc++11 / C++23 combo. After the first run the cache is populated and subsequent builds skip straight to our code.
+`conan create` runs the full lifecycle (configure → build → test → package) and lands the resulting `matching/0.1.0` package in the Conan cache. `--build=missing` lets Conan compile any dependency (e.g. `gtest`) Conan Center hasn't prebuilt for our clang-19 / libstdc++11 / C++23 combo. After the first run the cache is populated and subsequent builds skip straight to our code.
 
 Other profiles in `profiles/`: `clang-19-debug`, `clang-19-asan`, `clang-19-ubsan`, `clang-19-tsan`.
 
-### 4. Run the tests
+### 4. Deploy into the workspace
 
 ```bash
-ctest --preset conan-release
+conan install --requires=matching/0.1.0 -pr:a=profiles/clang-19-release \
+              --deployer=direct_deploy --output-folder=install
 ```
+
+Conan's `direct_deploy` extracts the package into `install/direct_deploy/matching/{bin,include,lib}` — a clean, FHS-shaped tree with no per-variant paths in the way.
 
 ### 5. Run the engine on a recorded sample
 
 ```bash
-./build/clang-19-release/bin/matching_engine < res/sample_1.stdin.txt > out.txt
+./install/direct_deploy/matching/bin/matching_engine < res/sample_1.stdin.txt > out.txt
+cat out.txt
 ```
 
 ### 6. Compare with recorded stdout
@@ -65,11 +69,11 @@ No diff means the run matches the golden file. `EnginePipelineTest.GoldenRecorde
 What each benchmark preset represents: `**[BENCHMARK.md](BENCHMARK.md)**`.
 
 ```bash
-./build/clang-19-release/bin/benchmark --help
+./install/direct_deploy/matching/bin/benchmark --help
 ```
 
 ```bash
-chrt 99 ./build/clang-19-release/bin/benchmark --orders 1000000 --iterations 10 --producer-cpu 2 --matcher-cpu 3 --stats-cpu 4
+chrt 99 ./install/direct_deploy/matching/bin/benchmark --orders 1000000 --iterations 10 --producer-cpu 2 --matcher-cpu 3 --stats-cpu 4
 ```
 
 ## Test System Configuration
@@ -146,7 +150,15 @@ Three-letter message tags (comma-separated fields; see `matching_engine --help`)
 
 ## Build details
 
-**Incremental rebuilds / IDE.** `CMakeToolchain` writes `CMakeUserPresets.json` at the repo root; CMake discovers it natively. After any `conan build`, rebuild or test without going through Conan:
+**Dev iteration.** Skip `conan create` while iterating — `conan build` configures, builds, and lets you run tests in place without going through the full package lifecycle:
+
+```bash
+conan build . -pr:a=profiles/clang-19-release --build=missing
+ctest --preset conan-release
+./build/clang-19-release/bin/matching_engine < res/sample_1.stdin.txt
+```
+
+`CMakeToolchain` writes `CMakeUserPresets.json` at the repo root; CMake discovers it natively, so after any `conan build` you can rebuild incrementally without re-running Conan:
 
 | Profile            | CMake preset name   |
 | ------------------ | ------------------- |
@@ -161,7 +173,7 @@ cmake --build --preset conan-release
 ctest --preset conan-release
 ```
 
-**Sanitisers.** Flags live in each profile's `[conf] tools.build:cxxflags+=[...]`, so Conan rebuilds `gtest` instrumented too — reports rooted in `gtest` internals are real, not false positives. TSan example with runtime options:
+**Sanitisers.** Flags live in each profile's `[conf] tools.build:cxxflags+=[...]`, so Conan rebuilds `gtest` instrumented too — reports rooted in `gtest` internals are real, not false positives. TSan example with runtime options (also pass `--security-opt seccomp=unconfined` to `docker run`):
 
 ```bash
 TSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --preset conan-tsan-debug
@@ -173,6 +185,6 @@ TSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --preset conan-tsan-debug
 
 ## Repo notes
 
-- **C++23**, Linux-oriented. **Conan 2** supplies **cxxopts** (CLI for `matching_engine` / `benchmark`) and **GoogleTest** (tests only). Library TUs stay third-party-free. `conan build .` is the canonical entry point (install + configure + build); one profile per variant under `profiles/` (`clang-19-release`, `clang-19-debug`, `clang-19-{asan,ubsan,tsan}`). Sanitizers live in profile `[conf]` and propagate to all dependencies. `CMakeToolchain` writes `CMakeUserPresets.json` for native `cmake --preset conan-…` rebuilds.
+- **C++23**, Linux-oriented. **Conan 2** supplies **cxxopts** (CLI for `matching_engine` / `benchmark`) and **GoogleTest** (tests only). Library TUs stay third-party-free. `conan create .` packages the project; `conan install --deployer=direct_deploy` extracts it into a clean `install/direct_deploy/matching/` tree. `conan build .` is the fast dev-iteration entry point. One profile per variant under `profiles/` (`clang-19-release`, `clang-19-debug`, `clang-19-{asan,ubsan,tsan}`); sanitisers live in profile `[conf]` and propagate to all dependencies. `CMakeToolchain` writes `CMakeUserPresets.json` for native `cmake --preset conan-…` rebuilds.
 - Mostly **header-only**; the extra translation unit is `src/signal_handler.cpp` (global stop source for signals).
 

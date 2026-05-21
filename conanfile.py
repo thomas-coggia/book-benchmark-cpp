@@ -10,6 +10,7 @@ class MatchingConan(ConanFile):
     name = "matching"
     version = "0.1.0"
     settings = "os", "compiler", "build_type", "arch"
+    exports_sources = "CMakeLists.txt", "src/*", "include/*", "test/*", "res/*"
 
     def layout(self):
         self.sanitizer = self.conf.get("user.matching:sanitizer")
@@ -39,3 +40,13 @@ class MatchingConan(ConanFile):
         cmake = CMake(self)
         cmake.configure()
         cmake.build()
+
+    def package(self):
+        cmake = CMake(self)
+        cmake.install()
+
+    def package_info(self):
+        self.cpp_info.libs = ["matching_runtime"]
+        self.cpp_info.bindirs = ["bin"]
+        self.cpp_info.includedirs = ["include"]
+        self.cpp_info.system_libs = ["pthread"]

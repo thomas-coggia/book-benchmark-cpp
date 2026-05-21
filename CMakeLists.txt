@@ -65,3 +65,12 @@ target_compile_features(benchmark PRIVATE cxx_std_23)
 # --- Tests --------------------------------------------------------------------------------
 enable_testing()
 add_subdirectory(test)
+
+# --- Install ------------------------------------------------------------------------------
+include(GNUInstallDirs)
+install(TARGETS matching_engine benchmark matching_runtime
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(DIRECTORY include/matching
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+        FILES_MATCHING PATTERN "*.hpp")

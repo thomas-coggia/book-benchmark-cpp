@@ -1,6 +1,7 @@
 .dev/
 .cursor/
 build/
+install/
 .conan2/
 CMakeUserPresets.json
 Testing/
