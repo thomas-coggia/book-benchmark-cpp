@@ -276,35 +276,11 @@ namespace matching {
         return;
       }
 
-      if (event.tif == tif_t::fok && !fillable_at_limit(event)) {
-        emitter_(order_cancelled_event_t{event.order_id, quantity_t{0}, event.quantity, cancel_cause_t::fill_or_kill});
-        return;
-      }
-
-      quantity_t filled_quantity{};
-      add_order_event_t residual = event;
       if (event.side == side_t::buy) {
-        match_against(asks_, residual, filled_quantity);
+        add_order(buy_side, event);
       } else {
-        match_against(bids_, residual, filled_quantity);
+        add_order(sell_side, event);
       }
-
-      const quantity_t residue = residual.quantity;
-      if (residue == 0) {
-        emitter_(order_filled_event_t{event.order_id, filled_quantity});
-        return;
-      }
-      if (event.tif == tif_t::gtc) {
-        if (!rest_order(residual)) {
-          emitter_(order_rejected_event_t{event.order_id, reject_code_t::duplicate_order_id});
-          return;
-        }
-        emitter_(order_resting_event_t{event.order_id, filled_quantity, residue});
-        return;
-      }
-      const cancel_cause_t cause =
-        event.tif == tif_t::ioc ? cancel_cause_t::immediate_or_cancel : cancel_cause_t::fill_or_kill;
-      emitter_(order_cancelled_event_t{event.order_id, filled_quantity, residue, cause});
     }
 
     /// Cancel by id; emit exactly one terminal event (@c CAN on success, @c REJ otherwise).
@@ -318,16 +294,12 @@ namespace matching {
         emitter_(order_rejected_event_t{event.order_id, reject_code_t::unknown_order_id});
         return;
       }
-      order_node_t* node = it->second;
-      const quantity_t cancelled = node->quantity;
-      if (node->side == side_t::buy) {
-        bids_.detach(node);
+      const quantity_t cancelled = it->second->quantity;
+      if (it->second->side == side_t::buy) {
+        cancel_resting(buy_side, it, event.order_id, cancelled);
       } else {
-        asks_.detach(node);
+        cancel_resting(sell_side, it, event.order_id, cancelled);
       }
-      node->active = false;
-      lookup_.erase(it);
-      emitter_(order_cancelled_event_t{event.order_id, quantity_t{0}, cancelled, cancel_cause_t::user_request});
     }
 
     /// No-op (@ref shutdown_t overload for @c std::visit).
@@ -354,6 +326,69 @@ namespace matching {
       quantity_t filled_quantity{};
     };
 
+    template <side_t Side>
+    [[nodiscard]] order_book_side_t<Side>& side_book(side_tag_t<Side>) noexcept {
+      if constexpr (Side == side_t::buy) {
+        return bids_;
+      } else {
+        return asks_;
+      }
+    }
+
+    template <side_t Side>
+    [[nodiscard]] const order_book_side_t<Side>& side_book(side_tag_t<Side>) const noexcept {
+      if constexpr (Side == side_t::buy) {
+        return bids_;
+      } else {
+        return asks_;
+      }
+    }
+
+    template <side_t Side>
+    void add_order(side_tag_t<Side> side, const add_order_event_t& event) {
+      if (event.tif == tif_t::fok && !fillable_at_limit(side, event)) {
+        emitter_(order_cancelled_event_t{event.order_id, quantity_t{0}, event.quantity, cancel_cause_t::fill_or_kill});
+        return;
+      }
+
+      quantity_t filled_quantity{};
+      add_order_event_t residual = event;
+      auto& opposite_book = side_book(opposite_of(side));
+      match_against(opposite_book, residual, filled_quantity);
+
+      const quantity_t residue = residual.quantity;
+      if (residue == 0) {
+        emitter_(order_filled_event_t{event.order_id, filled_quantity});
+        return;
+      }
+      if (event.tif == tif_t::gtc) {
+        if (!rest_order(side, residual)) {
+          emitter_(order_rejected_event_t{event.order_id, reject_code_t::duplicate_order_id});
+          return;
+        }
+        emitter_(order_resting_event_t{event.order_id, filled_quantity, residue});
+        return;
+      }
+      const cancel_cause_t cause =
+        event.tif == tif_t::ioc ? cancel_cause_t::immediate_or_cancel : cancel_cause_t::fill_or_kill;
+      emitter_(order_cancelled_event_t{event.order_id, filled_quantity, residue, cause});
+    }
+
+    template <side_t Side>
+    void cancel_resting(
+      side_tag_t<Side> side,
+      typename std::pmr::unordered_map<order_id_t, order_node_t*>::iterator it,
+      order_id_t order_id,
+      quantity_t cancelled
+    ) {
+      order_node_t* const node = it->second;
+      auto& book = side_book(side);
+      book.detach(node);
+      node->active = false;
+      lookup_.erase(it);
+      emitter_(order_cancelled_event_t{order_id, quantity_t{0}, cancelled, cancel_cause_t::user_request});
+    }
+
     /// Allocate from @ref clob_memory_t::resting_order_resource (throws on OOM).
     [[nodiscard]] order_node_t* allocate_resting_node(order_id_t id, side_t side, price_t price, quantity_t qty) {
       void* const raw = memory_.resting_order_resource()->allocate(sizeof(order_node_t), alignof(order_node_t));
@@ -372,11 +407,25 @@ namespace matching {
     }
 
     /// True if crossed levels hold at least @c incoming.quantity in aggregate (@ref fillable_quantity probe).
-    [[nodiscard]] bool fillable_at_limit(const add_order_event_t& incoming) const noexcept {
+    template <side_t Side>
+    [[nodiscard]] bool fillable_at_limit(side_tag_t<Side> side, const add_order_event_t& incoming) const noexcept {
       const quantity_t need = incoming.quantity;
-      const quantity_t available = incoming.side == side_t::buy ? asks_.fillable_quantity(incoming.price, need)
-                                                                : bids_.fillable_quantity(incoming.price, need);
+      const auto& opposite_book = side_book(opposite_of(side));
+      const quantity_t available = opposite_book.fillable_quantity(incoming.price, need);
       return available >= need;
+    }
+
+    template <side_t Side>
+    [[nodiscard]] bool rest_order(side_tag_t<Side> side, const add_order_event_t& residual) {
+      order_node_t* const node =
+        allocate_resting_node(residual.order_id, residual.side, residual.price, residual.quantity);
+      if (!lookup_.try_emplace(residual.order_id, node).second) {
+        node->active = false;
+        return false;
+      }
+      auto& book = side_book(side);
+      book.append(node);
+      return true;
     }
 
     /// Walk opposite ladder best-first until @p incoming is flat or @ref order_book_side_t::crosses fails.
@@ -459,21 +508,6 @@ namespace matching {
       lookup_.erase(node->order_id);
       // match_against erases the map entry once head == nullptr.
       (void)opposite;
-    }
-
-    [[nodiscard]] bool rest_order(const add_order_event_t& residual) {
-      order_node_t* const node =
-        allocate_resting_node(residual.order_id, residual.side, residual.price, residual.quantity);
-      if (!lookup_.try_emplace(residual.order_id, node).second) {
-        node->active = false;
-        return false;
-      }
-      if (residual.side == side_t::buy) {
-        bids_.append(node);
-      } else {
-        asks_.append(node);
-      }
-      return true;
     }
 
     clob_memory_t memory_;

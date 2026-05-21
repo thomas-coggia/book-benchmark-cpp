@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string_view>
+#include <utility>
 
 namespace matching {
 
@@ -43,6 +44,23 @@ namespace matching {
     buy = 0,
     sell = 1
   };
+
+  template <side_t Side>
+  inline constexpr side_t opposite_of_v = Side == side_t::buy ? side_t::sell : side_t::buy;
+
+  /// Tag for @ref side_t; dispatches templated book paths without repeating @c if/else branches.
+  template <side_t Side>
+  struct side_tag_t {
+    static constexpr side_t value = Side;
+  };
+
+  inline constexpr side_tag_t<side_t::buy> buy_side{};
+  inline constexpr side_tag_t<side_t::sell> sell_side{};
+
+  template <side_t Side>
+  [[nodiscard]] constexpr side_tag_t<opposite_of_v<Side>> opposite_of(side_tag_t<Side>) noexcept {
+    return {};
+  }
 
   /// Time-in-force for an add order.
   ///
