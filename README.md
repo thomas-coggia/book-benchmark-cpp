@@ -68,7 +68,7 @@ No diff means the run matches the golden file. `EnginePipelineTest.GoldenRecorde
 
 ### 7. Optional: benchmark binary
 
-What each benchmark preset represents: `**[BENCHMARK.md](BENCHMARK.md)**`.
+What each benchmark preset represents: **[BENCHMARK.md](BENCHMARK.md)**.
 
 ```bash
 ./install/direct_deploy/matching/bin/benchmark --help
@@ -144,8 +144,8 @@ Three-letter message tags, comma-separated fields, exactly one output line per m
 | Input                 | `include/matching/input_parser.hpp`                                             |
 | Output lines          | `include/matching/output_formatter.hpp`                                         |
 | Executable config     | `include/app/matching_engine_config.hpp`, `include/app/benchmark_config.hpp`    |
-| Benchmark presets     | `[BENCHMARK.md](BENCHMARK.md)`, `include/matching/benchmark/market_profile.hpp` |
-| Three-thread pipeline | `include/matching/runtime/`*, `src/matching_engine.cpp`                         |
+| Benchmark presets     | [`BENCHMARK.md`](BENCHMARK.md), `include/matching/benchmark/market_profile.hpp` |
+| Three-thread pipeline | `include/matching/runtime/*`, `src/matching_engine.cpp`                         |
 | Tests                 | `test/` (46 GoogleTest cases), golden data in `res/`                            |
 
 
