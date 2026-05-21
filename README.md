@@ -4,7 +4,9 @@ Single-symbol central limit order book: read **CSV-style lines from stdin**, mat
 
 This repo is a **deliberately improvable** sample: it avoids the last layers of proprietary tuning so nothing here reads as personal IP. The emphasis is **design**, **correctness**, and **maintainable code quality**, implemented as a **reasonable, STL-based** matching engine rather than a bleeding-edge exchange stack.
 
-For diagrams, data structures, and complexity notes, see `**[ARCHITECTURE.md](ARCHITECTURE.md)`**. For what each benchmark preset represents, see `**[BENCHMARK.md](BENCHMARK.md)**`.
+On a **consumer-grade laptop**, the matcher sustains **~6M orders/second** at **~100 ns p50** latency across **five synthetic market regimes** (calm, active, quote-heavy, volatile, sweep). That is a fair baseline for an **STL-only** implementation, and the **consistency across regimes** matters as much as the headline number. Full data in [`benchmark.txt`](benchmark.txt).
+
+For diagrams, data structures, and complexity notes, see [ARCHITECTURE.md](ARCHITECTURE.md). For what each benchmark preset represents, see [BENCHMARK.md](BENCHMARK.md).
 
 ---
 
